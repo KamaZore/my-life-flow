@@ -1,7 +1,7 @@
 /* Flowday service worker — offline-first caching so the app opens with no network */
 // Bump this version whenever app assets change so clients pick up the new
 // build instead of serving a stale cache (classic "preview looks broken" bug).
-const VERSION = "flowday-v62-profile-notifs";
+const VERSION = "flowday-v63-salon-fixes";
 const BASE = new URL(self.registration.scope).pathname; // supports subpath hosting
 
 // Static app shell (public/ files) — cached at install.

@@ -165,6 +165,8 @@ export function AppLayout({ children }: { children?: ReactNode }) {
         return { kind: "navigate" as const, to: "/expense/transactions?add=1" };
       case "business":
         return { kind: "menu" as const };
+      case "salon":
+        return { kind: "navigate" as const, to: "/salon/pos" };
       default:
         return { kind: "dialog" as const };
     }
@@ -385,7 +387,7 @@ export function AppLayout({ children }: { children?: ReactNode }) {
       <button
         onClick={handlePrimaryClick}
         className="card-soft fab-safe fixed left-1/2 z-40 flex size-12 -translate-x-1/2 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg md:hidden"
-        aria-label={system.id === "expense" ? t("exp.addTx") : t("quick.title")}
+        aria-label={system.id === "expense" ? t("exp.addTx") : system.id === "salon" ? t("salon.newSale") : t("quick.title")}
       >
         <Plus
           className={cn(
@@ -423,7 +425,7 @@ export function AppLayout({ children }: { children?: ReactNode }) {
             primaryAction.kind === "menu" && bizMenuOpen && "rotate-45",
           )}
         />
-        {system.id === "expense" ? t("exp.addTx") : t("quick.title")}
+        {system.id === "expense" ? t("exp.addTx") : system.id === "salon" ? t("salon.newSale") : t("quick.title")}
       </Button>
 
       <QuickAddDialog

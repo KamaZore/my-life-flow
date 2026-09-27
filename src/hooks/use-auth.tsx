@@ -68,7 +68,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // A stale/forged client session must never grant privileges. The role is
     // checked again by the backend in production; the static fallback also
     // refuses a local session that claims superadmin without a known account.
-    return stored;
+    // Merge over the CURRENT defaults so systems added after this session
+    // was created (e.g. salon) appear without forcing a re-login. Explicit
+    // false values in the stored perms still win over defaults.
+    return { ...stored, perms: { ...DEFAULT_PERMS, ...(stored.perms ?? {}) } };
   });
   const [isLoading, setIsLoading] = useState(false);
 
@@ -160,7 +163,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             email: session.email,
             name: session.name,
             role: session.role ?? "user",
-            perms: session.perms ?? DEFAULT_PERMS,
+            perms: { ...DEFAULT_PERMS, ...(session.perms ?? {}) },
           }
         : null,
       isSuperAdmin: session?.role === "superadmin",

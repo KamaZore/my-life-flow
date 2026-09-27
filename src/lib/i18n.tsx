@@ -1163,7 +1163,7 @@ const dict: Record<Lang, Record<string, string>> = {
     "workspace.today": "ថ្ងៃនេះ",
     // Admin / Owner tools (ភាសាខ្មែរ)
     "system.admin.name": "អ្នកគ្រប់គ្រង",
-    "system.salon.name": "សាលុន",
+    "system.salon.name": "សាឡន",
     "system.salon.desc": "លក់ភ្លាមៗ ស្តុក អតិថិជន និងបុគ្គលិក",
     "nav.salon.dashboard": "ផ្ទាំងគ្រប់គ្រង",
     "nav.salon.appointments": "ការណាត់ជួប",
@@ -1471,7 +1471,7 @@ const dict: Record<Lang, Record<string, string>> = {
     "salon.time": "ម៉ោង",
     "salon.todayAppointments": "ការណាត់ជួបថ្ងៃនេះ",
     "salon.upcoming": "នៅជិត",
-    "salon.shopName": "ឈ្មោះសាលុន",
+    "salon.shopName": "ឈ្មោះសាឡន",
     "nav.salon.categories": "ប្រភេទ",
     "salon.newBooking": "ការណាត់ជួបថ្មី",
     "salon.editBooking": "កែសម្រួលការណាត់ជួប",

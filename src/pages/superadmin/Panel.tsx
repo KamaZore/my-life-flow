@@ -74,20 +74,25 @@ const SYSTEMS: { key: keyof SystemPerms; labelKey: string }[] = [
   { key: "life", labelKey: "system.life.name" },
   { key: "expense", labelKey: "system.expense.name" },
   { key: "business", labelKey: "system.business.name" },
+  { key: "salon", labelKey: "system.salon.name" },
   { key: "admin", labelKey: "system.admin.name" },
 ];
 
 /** Counts records inside a user's data doc per system. */
-function summarize(d: unknown): { life: number; expense: number; business: number } | null {
+function summarize(d: unknown): { life: number; expense: number; business: number; salon: number } | null {
   if (!d || typeof d !== "object") return null;
   const doc = d as Record<string, unknown>;
   const arr = (v: unknown) => (Array.isArray(v) ? v.length : 0);
   const biz = doc.business as Record<string, unknown> | undefined;
+  const sl = doc.salon as Record<string, unknown> | undefined;
   return {
     life: arr(doc.tasks) + arr(doc.habits) + arr(doc.projects) + arr(doc.notes),
     expense: arr(doc.transactions) + arr(doc.accounts) + arr(doc.debts),
     business: biz
       ? arr(biz.products) + arr(biz.orders) + arr(biz.customers) + arr(biz.expenses)
+      : 0,
+    salon: sl
+      ? arr(sl.appointments) + arr(sl.customers) + arr(sl.services) + arr(sl.staff)
       : 0,
   };
 }
@@ -823,12 +828,13 @@ export default function SuperAdminPanel() {
                   {t("sa.loading")}
                 </div>
               ) : dataSummary ? (
-                <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
                   {(
                     [
                       ["system.life.name", dataSummary.life],
                       ["system.expense.name", dataSummary.expense],
                       ["system.business.name", dataSummary.business],
+                      ["system.salon.name", dataSummary.salon],
                     ] as const
                   ).map(([k, n]) => (
                     <div key={k} className="rounded-2xl bg-muted/60 p-3">

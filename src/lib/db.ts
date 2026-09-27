@@ -94,6 +94,7 @@ export type SystemPerms = {
   life: boolean;
   expense: boolean;
   business: boolean;
+  salon: boolean;
   admin: boolean;
 };
 
@@ -101,6 +102,7 @@ export const DEFAULT_PERMS: SystemPerms = {
   life: true,
   expense: true,
   business: true,
+  salon: true,
   // Administrative oversight is opt-in. Only a superadmin gets it by default.
   admin: false,
 };

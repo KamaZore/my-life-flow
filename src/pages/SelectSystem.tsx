@@ -36,7 +36,7 @@ export default function SelectSystem() {
   }, []);
   const allModules = useModules();
   const allowed = selectableModules(allModules).filter((m) =>
-    m.custom ? true : can((m.permKey ?? m.id) as "life" | "expense" | "business" | "admin"),
+    m.custom ? true : can((m.permKey ?? m.id) as "life" | "expense" | "business" | "salon" | "admin"),
   );
 
   function label(m: AppModule): string {
@@ -64,7 +64,7 @@ export default function SelectSystem() {
       else navigate(m.path, { replace: true });
       return;
     }
-    setActiveSystem(m.id as "life" | "expense" | "business" | "admin");
+    setActiveSystem(m.id as "life" | "expense" | "business" | "salon" | "admin");
     navigate(m.path ?? `/${m.id}`, { replace: true });
   }
 

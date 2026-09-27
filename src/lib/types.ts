@@ -166,7 +166,7 @@ export type AppSettings = {
 /* Systems (one app, three workspaces)                                 */
 /* ------------------------------------------------------------------ */
 
-export type SystemId = "life" | "expense" | "business" | "admin";
+export type SystemId = "life" | "expense" | "business" | "salon" | "admin";
 
 /* ------------------------------------------------------------------ */
 /* Expense system                                                      */
@@ -483,6 +483,81 @@ export const PAYMENT_LABELS: Record<PaymentMethod, string> = {
   other: "Other",
 };
 
+/* ------------------------------------------------------------------ */
+/* Salon Management system                                             */
+/* ------------------------------------------------------------------ */
+
+/** Offered service (haircut, coloring, manicure…). */
+export type SalonService = {
+  id: string;
+  name: string;
+  /** price in USD (stored currency) */
+  price: number;
+  /** duration in minutes */
+  duration: number;
+  color?: string;
+  active?: boolean;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type SalonCustomer = {
+  id: string;
+  name: string;
+  phone?: string;
+  note?: string;
+  visits: number;
+  /** lifetime spend in USD */
+  spent: number;
+  /** ISO date of last visit */
+  lastVisit?: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type SalonStaff = {
+  id: string;
+  name: string;
+  role?: string;
+  phone?: string;
+  /** share of service revenue, 0-100 */
+  commission: number;
+  active?: boolean;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type SalonAppointmentStatus = "booked" | "done" | "cancelled";
+
+export type SalonAppointment = {
+  id: string;
+  customerId: string;
+  serviceId: string;
+  staffId?: string;
+  /** ISO date (yyyy-mm-dd) */
+  date: string;
+  /** HH:mm 24h */
+  time: string;
+  status: SalonAppointmentStatus;
+  /** price captured at booking (USD) */
+  price: number;
+  note?: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type SalonData = {
+  shopName: string;
+  services: SalonService[];
+  customers: SalonCustomer[];
+  staff: SalonStaff[];
+  appointments: SalonAppointment[];
+};
+
+export const APPOINTMENT_STATUSES: SalonAppointmentStatus[] = ["booked", "done", "cancelled"];
+
+export const SALON_SERVICE_COLORS = ["#ec4899", "#8b5cf6", "#0ea5e9", "#10b981", "#f59e0b", "#14b8a6"];
+
 export type AppData = {
   version: number;
   seeded: boolean;
@@ -508,6 +583,8 @@ export type AppData = {
   /** savings pots tracked inside the expense system */
   savings: SavingGoal[];
   business: BusinessData;
+  /** salon management system */
+  salon: SalonData;
 };
 
 export const PRIORITIES: Priority[] = ["low", "medium", "high"];

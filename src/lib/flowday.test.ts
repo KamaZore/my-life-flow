@@ -15,6 +15,9 @@ import {
 import { parseCapture } from "./parse";
 import {
   addProcessStep,
+  addSalonCustomer,
+  addSalonService,
+  addSalonStaff,
   addSavingGoal,
   addSubtask,
   addTask,
@@ -23,6 +26,7 @@ import {
   contributeSaving,
   deleteProject,
   deleteProcess,
+  deleteSalonAppointment,
   deleteSavingGoal,
   exportData,
   getData,
@@ -35,6 +39,7 @@ import {
   projectProgress,
   reorderTasks,
   resetDemoData,
+  saveSalonAppointment,
   scheduleProcess,
   toggleHabitDate,
   toggleSubtask,
@@ -584,5 +589,63 @@ describe("store", () => {
     t = getData().tasks.find((x) => x.id === done.id) as Task;
     expect(t.status).toBe("completed");
     expect(t.completedAt).toBeDefined();
+  });
+
+  test("salon: completing an appointment updates customer stats, undo reverses it", () => {
+    resetDemoData();
+    const today = todayKey();
+    const svc = addSalonService({ name: "Trim", price: 12, duration: 30 });
+    const cust = addSalonCustomer({ name: "Test Client" });
+    const member = addSalonStaff({ name: "Stylist", commission: 50 });
+
+    const appt = saveSalonAppointment({
+      customerId: cust.id,
+      serviceId: svc.id,
+      staffId: member.id,
+      date: today,
+      time: "10:00",
+      status: "booked",
+      price: 12,
+    });
+
+    let c = getData().salon.customers.find((x) => x.id === cust.id)!;
+    expect(c.visits).toBe(0);
+    expect(c.spent).toBe(0);
+
+    // Complete it → stats roll forward
+    saveSalonAppointment({ ...appt, status: "done" });
+    c = getData().salon.customers.find((x) => x.id === cust.id)!;
+    expect(c.visits).toBe(1);
+    expect(c.spent).toBe(12);
+    expect(c.lastVisit).toBe(today);
+
+    // Move back to booked → stats roll back
+    saveSalonAppointment({ ...appt, status: "booked" });
+    c = getData().salon.customers.find((x) => x.id === cust.id)!;
+    expect(c.visits).toBe(0);
+    expect(c.spent).toBe(0);
+
+    // Complete again, then delete → stats reverse
+    saveSalonAppointment({ ...appt, status: "done" });
+    deleteSalonAppointment(appt.id);
+    c = getData().salon.customers.find((x) => x.id === cust.id)!;
+    expect(c.visits).toBe(0);
+    expect(c.spent).toBe(0);
+    expect(getData().salon.appointments.find((x) => x.id === appt.id)).toBeUndefined();
+  });
+
+  test("salon: normalizeData fills missing salon slice and keeps existing data", () => {
+    resetDemoData();
+    const svc = addSalonService({ name: "Color", price: 30, duration: 90 });
+    const exported = JSON.parse(exportData()) as { salon?: { services?: unknown[] } };
+    expect(Array.isArray(exported.salon?.services)).toBe(true);
+    expect(exported.salon?.services?.length).toBeGreaterThan(0);
+
+    // Strip salon entirely → importData must re-fill defaults, not crash
+    delete exported.salon;
+    expect(importData(JSON.stringify(exported))).toBe(true);
+    expect(Array.isArray(getData().salon.services)).toBe(true);
+
+    void svc;
   });
 });

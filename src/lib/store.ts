@@ -39,6 +39,11 @@ import type {
   Recurrence,
   RecurringTx,
   SavingGoal,
+  SalonAppointment,
+  SalonCustomer,
+  SalonData,
+  SalonService,
+  SalonStaff,
   StaffMember,
   Subtask,
   Supplier,
@@ -800,6 +805,34 @@ function seedData(): AppData {
       taxEnabled: false,
       shopName: "Flowday Mart",
     },
+    salon: {
+      shopName: "Glow Salon",
+      services: [
+        { id: "sv-haircut", name: "Haircut", price: 8, duration: 30, color: "#ec4899", createdAt: t - 40 * 864e5, updatedAt: t },
+        { id: "sv-color", name: "Hair coloring", price: 25, duration: 90, color: "#8b5cf6", createdAt: t - 40 * 864e5, updatedAt: t },
+        { id: "sv-wash", name: "Wash & style", price: 5, duration: 20, color: "#0ea5e9", createdAt: t - 40 * 864e5, updatedAt: t },
+        { id: "sv-facial", name: "Facial", price: 15, duration: 60, color: "#10b981", createdAt: t - 40 * 864e5, updatedAt: t },
+      ],
+      customers: [
+        { id: "sc-sokha", name: "Sokha", phone: "011 234 567", visits: 6, spent: 74, lastVisit: addDaysKey(today, -6), createdAt: t - 90 * 864e5, updatedAt: t },
+        { id: "sc-dara", name: "Dara", phone: "012 345 678", visits: 3, spent: 51, lastVisit: addDaysKey(today, -15), createdAt: t - 60 * 864e5, updatedAt: t },
+        { id: "sc-chantha", name: "Chantha", phone: "077 888 999", visits: 1, spent: 8, lastVisit: addDaysKey(today, -30), createdAt: t - 30 * 864e5, updatedAt: t },
+        { id: "sc-malis", name: "Malis", phone: "096 111 222", visits: 9, spent: 168, lastVisit: addDaysKey(today, -2), createdAt: t - 120 * 864e5, updatedAt: t },
+      ],
+      staff: [
+        { id: "ss-davy", name: "Davy", role: "Senior stylist", phone: "011 000 111", commission: 40, createdAt: t - 90 * 864e5, updatedAt: t },
+        { id: "ss-ratha", name: "Ratha", role: "Colorist", phone: "012 222 333", commission: 35, createdAt: t - 80 * 864e5, updatedAt: t },
+        { id: "ss-kanha", name: "Kanha", role: "Nail artist", commission: 30, createdAt: t - 70 * 864e5, updatedAt: t },
+      ],
+      appointments: [
+        { id: "sa-1", customerId: "sc-malis", serviceId: "sv-color", staffId: "ss-ratha", date: today, time: "09:00", status: "done", price: 25, createdAt: t - 3 * 864e5, updatedAt: t },
+        { id: "sa-2", customerId: "sc-sokha", serviceId: "sv-haircut", staffId: "ss-davy", date: today, time: "11:00", status: "booked", price: 8, createdAt: t - 2 * 864e5, updatedAt: t },
+        { id: "sa-3", customerId: "sc-dara", serviceId: "sv-facial", staffId: "ss-davy", date: today, time: "14:00", status: "booked", price: 15, createdAt: t - 2 * 864e5, updatedAt: t },
+        { id: "sa-4", customerId: "sc-chantha", serviceId: "sv-wash", date: addDaysKey(today, 1), time: "10:00", status: "booked", price: 5, createdAt: t - 864e5, updatedAt: t },
+        { id: "sa-5", customerId: "sc-sokha", serviceId: "sv-haircut", staffId: "ss-davy", date: addDaysKey(today, -6), time: "15:00", status: "done", price: 8, createdAt: t - 7 * 864e5, updatedAt: t },
+        { id: "sa-6", customerId: "sc-malis", serviceId: "sv-facial", staffId: "ss-kanha", date: addDaysKey(today, -2), time: "13:00", status: "cancelled", price: 15, createdAt: t - 4 * 864e5, updatedAt: t },
+      ],
+    },
   };
 }
 
@@ -868,6 +901,14 @@ export function normalizeData(parsed: Partial<AppData> | null | undefined): AppD
           ? parsed.business.quoteCounter
           : 0,
     },
+    salon: {
+      ...fresh.salon,
+      ...(parsed.salon ?? {}),
+      services: Array.isArray(parsed.salon?.services) ? parsed.salon.services : [],
+      customers: Array.isArray(parsed.salon?.customers) ? parsed.salon.customers : [],
+      staff: Array.isArray(parsed.salon?.staff) ? parsed.salon.staff : [],
+      appointments: Array.isArray(parsed.salon?.appointments) ? parsed.salon.appointments : [],
+    },
   };
 }
 
@@ -917,6 +958,13 @@ function emptyData(): AppData {
       taxRate: 0,
       taxEnabled: false,
       shopName: "",
+    },
+    salon: {
+      shopName: "",
+      services: [],
+      customers: [],
+      staff: [],
+      appointments: [],
     },
   };
 }
@@ -1838,6 +1886,13 @@ export function clearAllData() {
     debts: [],
     savings: [],
     business: { ...data.business, products: [], customers: [], suppliers: [], orders: [], heldOrders: [], purchases: [], expenses: [], staff: [], quotes: [], orderCounter: 0, quoteCounter: 0 },
+    salon: {
+      ...data.salon,
+      services: [],
+      customers: [],
+      staff: [],
+      appointments: [],
+    },
     tasks: [],
     inboxItems: [],
     projects: [],
@@ -2483,6 +2538,155 @@ export function dailyTotals(
 /* ================================================================== */
 /* Business: products / customers / suppliers / purchases / expenses   */
 /* ================================================================== */
+
+/* ------------------------------------------------------------------ */
+/* Salon Management system                                             */
+/* ------------------------------------------------------------------ */
+
+export function useSalon(): SalonData {
+  return useAppData().salon;
+}
+
+export function updateSalonSettings(patch: Partial<Pick<SalonData, "shopName">>) {
+  set((d) => ({ ...d, salon: { ...d.salon, ...patch } }));
+}
+
+export function addSalonService(input: Omit<SalonService, "id" | "createdAt" | "updatedAt">): SalonService {
+  const ts = nowTs();
+  const svc: SalonService = { ...input, id: uid(), createdAt: ts, updatedAt: ts };
+  set((d) => ({ ...d, salon: { ...d.salon, services: [svc, ...d.salon.services] } }));
+  return svc;
+}
+
+export function updateSalonService(id: string, patch: Partial<SalonService>) {
+  const ts = nowTs();
+  set((d) => ({
+    ...d,
+    salon: {
+      ...d.salon,
+      services: d.salon.services.map((x) => (x.id === id ? { ...x, ...patch, updatedAt: ts } : x)),
+    },
+  }));
+}
+
+export function deleteSalonService(id: string) {
+  set((d) => ({ ...d, salon: { ...d.salon, services: d.salon.services.filter((x) => x.id !== id) } }));
+}
+
+export function addSalonCustomer(input: Omit<SalonCustomer, "id" | "visits" | "spent" | "createdAt" | "updatedAt">): SalonCustomer {
+  const ts = nowTs();
+  const c: SalonCustomer = { ...input, id: uid(), visits: 0, spent: 0, createdAt: ts, updatedAt: ts };
+  set((d) => ({ ...d, salon: { ...d.salon, customers: [c, ...d.salon.customers] } }));
+  return c;
+}
+
+export function updateSalonCustomer(id: string, patch: Partial<SalonCustomer>) {
+  const ts = nowTs();
+  set((d) => ({
+    ...d,
+    salon: {
+      ...d.salon,
+      customers: d.salon.customers.map((x) => (x.id === id ? { ...x, ...patch, updatedAt: ts } : x)),
+    },
+  }));
+}
+
+export function deleteSalonCustomer(id: string) {
+  set((d) => ({ ...d, salon: { ...d.salon, customers: d.salon.customers.filter((x) => x.id !== id) } }));
+}
+
+export function addSalonStaff(input: Omit<SalonStaff, "id" | "createdAt" | "updatedAt">): SalonStaff {
+  const ts = nowTs();
+  const m: SalonStaff = { ...input, id: uid(), createdAt: ts, updatedAt: ts };
+  set((d) => ({ ...d, salon: { ...d.salon, staff: [m, ...d.salon.staff] } }));
+  return m;
+}
+
+export function updateSalonStaff(id: string, patch: Partial<SalonStaff>) {
+  const ts = nowTs();
+  set((d) => ({
+    ...d,
+    salon: {
+      ...d.salon,
+      staff: d.salon.staff.map((x) => (x.id === id ? { ...x, ...patch, updatedAt: ts } : x)),
+    },
+  }));
+}
+
+export function deleteSalonStaff(id: string) {
+  set((d) => ({ ...d, salon: { ...d.salon, staff: d.salon.staff.filter((x) => x.id !== id) } }));
+}
+
+/**
+ * Book or edit an appointment. Completing an appointment (status → "done"
+ * from "booked") rolls the customer stats forward: visits +1, spent +price,
+ * lastVisit = appointment date. Moving back out of "done" undoes it.
+ */
+export function saveSalonAppointment(input: Omit<SalonAppointment, "id" | "createdAt" | "updatedAt"> & { id?: string }): SalonAppointment {
+  const ts = nowTs();
+  const existing = input.id ? data.salon.appointments.find((x) => x.id === input.id) : undefined;
+  const appt: SalonAppointment = existing
+    ? { ...existing, ...input, id: existing.id, createdAt: existing.createdAt, updatedAt: ts }
+    : { ...input, id: uid(), createdAt: ts, updatedAt: ts };
+
+  const wasDone = existing?.status === "done";
+  const isDone = appt.status === "done";
+
+  set((d) => ({
+    ...d,
+    salon: {
+      ...d.salon,
+      appointments: existing
+        ? d.salon.appointments.map((x) => (x.id === appt.id ? appt : x))
+        : [appt, ...d.salon.appointments],
+      customers: d.salon.customers.map((c) => {
+        if (c.id !== appt.customerId) return c;
+        if (!wasDone && isDone) {
+          return {
+            ...c,
+            visits: c.visits + 1,
+            spent: Math.round((c.spent + appt.price) * 100) / 100,
+            lastVisit: appt.date,
+            updatedAt: ts,
+          };
+        }
+        if (wasDone && !isDone) {
+          return {
+            ...c,
+            visits: Math.max(0, c.visits - 1),
+            spent: Math.max(0, Math.round((c.spent - appt.price) * 100) / 100),
+            updatedAt: ts,
+          };
+        }
+        return c;
+      }),
+    },
+  }));
+  return appt;
+}
+
+export function deleteSalonAppointment(id: string) {
+  const appt = data.salon.appointments.find((x) => x.id === id);
+  if (!appt) return;
+  const ts = nowTs();
+  set((d) => ({
+    ...d,
+    salon: {
+      ...d.salon,
+      appointments: d.salon.appointments.filter((x) => x.id !== id),
+      customers: d.salon.customers.map((c) =>
+        c.id === appt.customerId && appt.status === "done"
+          ? {
+              ...c,
+              visits: Math.max(0, c.visits - 1),
+              spent: Math.max(0, Math.round((c.spent - appt.price) * 100) / 100),
+              updatedAt: ts,
+            }
+          : c,
+      ),
+    },
+  }));
+}
 
 export function useBusiness(): BusinessData {
   return useAppData().business;

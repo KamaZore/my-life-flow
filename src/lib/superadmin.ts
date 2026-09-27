@@ -41,6 +41,6 @@ export function effectivePerms(
   role: string | undefined,
   permissions: SystemPerms | null | undefined,
 ): SystemPerms {
-  if (role === "superadmin") return { life: true, expense: true, business: true, admin: true };
+  if (role === "superadmin") return { life: true, expense: true, business: true, salon: true, admin: true };
   return { ...DEFAULT_PERMS, ...(permissions ?? {}) };
 }

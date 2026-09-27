@@ -19,7 +19,7 @@ export function RequireSystem({
   system,
   children,
 }: {
-  system: "life" | "expense" | "business" | "admin";
+  system: "life" | "expense" | "business" | "salon" | "admin";
   children: ReactNode;
 }) {
   const { isLoading, isAuthenticated, can } = useAuth();

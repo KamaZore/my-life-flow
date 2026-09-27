@@ -41,6 +41,13 @@ const ExpenseAccounts = lazy(() => import("./pages/expense/Accounts.tsx"));
 const ExpenseRecurring = lazy(() => import("./pages/expense/Recurring.tsx"));
 const ExpenseDebts = lazy(() => import("./pages/expense/Debts.tsx"));
 const ExpenseSavings = lazy(() => import("./pages/expense/Savings.tsx"));
+const SalonDashboard = lazy(() => import("./pages/salon/Dashboard.tsx"));
+const SalonAppointments = lazy(() => import("./pages/salon/Appointments.tsx"));
+const SalonCustomers = lazy(() => import("./pages/salon/Customers.tsx"));
+const SalonServices = lazy(() => import("./pages/salon/Services.tsx"));
+const SalonStaffPage = lazy(() => import("./pages/salon/Staff.tsx"));
+const SalonReports = lazy(() => import("./pages/salon/Reports.tsx"));
+const SalonSettings = lazy(() => import("./pages/salon/Settings.tsx"));
 const BusinessDashboard = lazy(() => import("./pages/business/Dashboard.tsx"));
 const BusinessPOS = lazy(() => import("./pages/business/POS.tsx"));
 const BusinessSales = lazy(() => import("./pages/business/Sales.tsx"));
@@ -309,6 +316,15 @@ function AppRoutes() {
       <Route path="/expense/savings" element={<RequireSystem system="expense"><AppLayout><ExpenseSavings /></AppLayout></RequireSystem>} />
       <Route path="/expense/settings" element={<RequireSystem system="expense"><AppLayout><ExpenseSettings /></AppLayout></RequireSystem>} />
 
+      {/* Salon Management system — same AppLayout chrome as the other systems. */}
+      <Route path="/salon/dashboard" element={<RequireSystem system="salon"><AppLayout><SalonDashboard /></AppLayout></RequireSystem>} />
+      <Route path="/salon/appointments" element={<RequireSystem system="salon"><AppLayout><SalonAppointments /></AppLayout></RequireSystem>} />
+      <Route path="/salon/customers" element={<RequireSystem system="salon"><AppLayout><SalonCustomers /></AppLayout></RequireSystem>} />
+      <Route path="/salon/services" element={<RequireSystem system="salon"><AppLayout><SalonServices /></AppLayout></RequireSystem>} />
+      <Route path="/salon/staff" element={<RequireSystem system="salon"><AppLayout><SalonStaffPage /></AppLayout></RequireSystem>} />
+      <Route path="/salon/reports" element={<RequireSystem system="salon"><AppLayout><SalonReports /></AppLayout></RequireSystem>} />
+      <Route path="/salon/settings" element={<RequireSystem system="salon"><AppLayout><SalonSettings /></AppLayout></RequireSystem>} />
+
       {/* Business Management / POS system — same AppLayout chrome as Life. */}
       <Route path="/business/dashboard" element={<RequireSystem system="business"><AppLayout><BusinessDashboard /></AppLayout></RequireSystem>} />
       <Route path="/business/pos" element={<RequireSystem system="business"><AppLayout><BusinessPOS /></AppLayout></RequireSystem>} />
@@ -335,6 +351,7 @@ function AppRoutes() {
           so they must redirect into the system's default page. */}
       <Route path="/life" element={<Navigate to="/life/today" replace />} />
       <Route path="/expense" element={<Navigate to="/expense/dashboard" replace />} />
+      <Route path="/salon" element={<Navigate to="/salon/dashboard" replace />} />
       <Route path="/business" element={<Navigate to="/business/dashboard" replace />} />
       <Route path="/admin" element={<Navigate to="/admin/overview" replace />} />
 

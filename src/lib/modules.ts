@@ -24,6 +24,7 @@ import {
   Package,
   Plane,
   Receipt,
+  Scissors,
   Settings as SettingsIcon,
   ShieldCheck,
   ShoppingCart,
@@ -53,7 +54,7 @@ export type AppModule = {
   /** path for built-ins; customs link to a URL (hash-routed or external) */
   path?: string;
   /** built-in module id this overlays (nav/route wiring) */
-  builtin?: "life" | "expense" | "business" | "admin";
+  builtin?: "life" | "expense" | "business" | "salon" | "admin";
   enabled: boolean;
   /** permission slot used by RequireSystem (customs default to their own id) */
   permKey?: keyof SystemPerms & string;
@@ -67,6 +68,7 @@ export const ICONS: Record<string, LucideIcon> = {
   wallet: Wallet,
   cart: ShoppingCart,
   store: Store,
+  scissors: Scissors,
   package: Package,
   boxes: Boxes,
   truck: Truck,
@@ -130,6 +132,17 @@ export function defaultModules(): AppModule[] {
       permKey: "business",
       enabled: true,
       order: 2,
+    },
+    {
+      id: "salon",
+      labelKey: "system.salon.name",
+      descKey: "system.salon.desc",
+      icon: "scissors",
+      accent: "text-rose-600 dark:text-rose-400",
+      builtin: "salon",
+      permKey: "salon",
+      enabled: true,
+      order: 3,
     },
     {
       id: "admin",

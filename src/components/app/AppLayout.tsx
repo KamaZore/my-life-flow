@@ -269,7 +269,7 @@ export function AppLayout({ children }: { children?: ReactNode }) {
             <DropdownMenuContent align="start" className="w-60 rounded-2xl p-1.5">
               {selectableModules(modules)
                 .filter((m) =>
-                  m.custom ? true : can((m.permKey ?? m.id) as "life" | "expense" | "business" | "admin"),
+                  m.custom ? true : can((m.permKey ?? m.id) as "life" | "expense" | "business" | "salon" | "admin"),
                 )
                 .map((m) => {
                   const Icon = ICONS[m.icon] ?? ICONS.sparkles;

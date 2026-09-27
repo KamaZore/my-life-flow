@@ -23,6 +23,7 @@ export function MoneyInput({
   min = "0",
   autoFocus,
   placeholder,
+  label,
 }: {
   id?: string;
   /** current amount in USD (the stored currency) */
@@ -31,6 +32,8 @@ export function MoneyInput({
   min?: string;
   autoFocus?: boolean;
   placeholder?: string;
+  /** Optional custom label; defaults to the generic "Amount". */
+  label?: string;
 }) {
   const { t } = useI18n();
   const settings = useSettings();
@@ -109,7 +112,17 @@ export function MoneyInput({
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between gap-2">
-        {id ? <label htmlFor={id} className="text-sm font-medium leading-none">{t("exp.amount")}</label> : <span className="text-sm font-medium leading-none">{t("exp.amount")}</span>}
+        {label ? (
+          id ? (
+            <label htmlFor={id} className="text-sm font-medium leading-none">{label}</label>
+          ) : (
+            <span className="text-sm font-medium leading-none">{label}</span>
+          )
+        ) : id ? (
+          <label htmlFor={id} className="text-sm font-medium leading-none">{t("exp.amount")}</label>
+        ) : (
+          <span className="text-sm font-medium leading-none">{t("exp.amount")}</span>
+        )}
         <div className="flex items-center gap-1 rounded-lg bg-muted p-0.5" role="group" aria-label={t("cur.toggle")}>
           <button
             type="button"

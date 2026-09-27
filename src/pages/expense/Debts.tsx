@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { money } from "@/lib/format";
+import { money, moneyShort } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
 import {
   addDebt,
@@ -35,7 +35,6 @@ const emptyForm = {
   name: "",
   direction: "payable" as Debt["direction"],
   total: "",
-  paid: "",
   dueDate: "",
   note: "",
 };
@@ -74,7 +73,6 @@ export default function ExpenseDebts() {
       name: d.name,
       direction: d.direction,
       total: String(d.total),
-      paid: String(d.paid),
       dueDate: d.dueDate ?? "",
       note: d.note ?? "",
     });
@@ -85,7 +83,6 @@ export default function ExpenseDebts() {
     const name = form.name.trim();
     const total = Number(form.total);
     if (!name || !total || total <= 0) return;
-    const paid = Math.max(0, Math.min(Number(form.paid) || 0, total));
     const payload = {
       name,
       direction: form.direction,
@@ -94,10 +91,9 @@ export default function ExpenseDebts() {
       note: form.note.trim() || undefined,
     };
     if (editing) {
-      updateDebt(editing.id, { ...payload, paid });
+      updateDebt(editing.id, payload);
     } else {
-      const d = addDebt(payload);
-      if (paid > 0) payDebt(d.id, paid);
+      addDebt(payload);
     }
     toast.success(t("exp.debtSaved"));
     setOpen(false);
@@ -137,8 +133,8 @@ export default function ExpenseDebts() {
       </div>
 
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
-        <StatCard label={t("exp.youOwe")} value={money(totals.youOwe)} icon={ArrowUpRight} tone="text-rose-600 dark:text-rose-400" tint="bg-rose-500/12" />
-        <StatCard label={t("exp.owedToMe")} value={money(totals.owedToYou)} icon={ArrowDownLeft} tone="text-emerald-600 dark:text-emerald-400" tint="bg-emerald-500/12" />
+        <StatCard label={t("exp.iOwe")} value={moneyShort(totals.youOwe)} icon={ArrowUpRight} tone="text-rose-600 dark:text-rose-400" tint="bg-rose-500/12" />
+        <StatCard label={t("exp.owedToMe")} value={moneyShort(totals.owedToYou)} icon={ArrowDownLeft} tone="text-emerald-600 dark:text-emerald-400" tint="bg-emerald-500/12" />
         <StatCard label={t("exp.debts")} value={String(openDebts.length)} icon={HandCoins} tone="text-sky-600 dark:text-sky-400" tint="bg-sky-500/12" />
       </div>
 
@@ -278,12 +274,9 @@ export default function ExpenseDebts() {
               />
             </div>
             <MoneyInput
+              label={t("biz.total")}
               valueUsd={form.total === "" ? null : Number(form.total)}
               onChangeUsd={(v) => setForm({ ...form, total: v === null ? "" : String(v) })}
-            />
-            <MoneyInput
-              valueUsd={form.paid === "" ? null : Number(form.paid)}
-              onChangeUsd={(v) => setForm({ ...form, paid: v === null ? "" : String(v) })}
             />
             <div className="space-y-1.5">
               <Label htmlFor="debt-due">{t("exp.dueDate")}</Label>
@@ -331,6 +324,7 @@ export default function ExpenseDebts() {
                 </p>
               </div>
               <MoneyInput
+                label={t("exp.paymentAmount")}
                 valueUsd={payAmount === "" ? null : Number(payAmount)}
                 onChangeUsd={(v) => setPayAmount(v === null ? "" : String(v))}
                 autoFocus

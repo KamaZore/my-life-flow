@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { money } from "@/lib/format";
+import { money, moneyShort } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
 import {
   addSavingGoal,
@@ -166,14 +166,14 @@ export default function ExpenseSavings() {
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
         <StatCard
           label={t("sav.totalSaved")}
-          value={money(totals.saved)}
+          value={moneyShort(totals.saved)}
           icon={PiggyBank}
           tone="text-emerald-600 dark:text-emerald-400"
           tint="bg-emerald-500/12"
         />
         <StatCard
           label={t("sav.thisMonth")}
-          value={money(monthlyIn)}
+          value={moneyShort(monthlyIn)}
           icon={TrendingUp}
           tone="text-sky-600 dark:text-sky-400"
           tint="bg-sky-500/12"
@@ -323,16 +323,16 @@ export default function ExpenseSavings() {
                 autoFocus
               />
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <MoneyInput
-                valueUsd={form.target === "" ? null : Number(form.target)}
-                onChangeUsd={(v) => setForm({ ...form, target: v === null ? "" : String(v) })}
-              />
-              <MoneyInput
-                valueUsd={form.saved === "" ? null : Number(form.saved)}
-                onChangeUsd={(v) => setForm({ ...form, saved: v === null ? "" : String(v) })}
-              />
-            </div>
+            <MoneyInput
+              label={t("sav.target")}
+              valueUsd={form.target === "" ? null : Number(form.target)}
+              onChangeUsd={(v) => setForm({ ...form, target: v === null ? "" : String(v) })}
+            />
+            <MoneyInput
+              label={t("sav.alreadySaved")}
+              valueUsd={form.saved === "" ? null : Number(form.saved)}
+              onChangeUsd={(v) => setForm({ ...form, saved: v === null ? "" : String(v) })}
+            />
             <div className="space-y-1.5">
               <Label htmlFor="sav-date">{t("sav.targetDate")}</Label>
               <Input
@@ -415,6 +415,7 @@ export default function ExpenseSavings() {
                 </p>
               </div>
               <MoneyInput
+                label={t("sav.amount")}
                 valueUsd={moveAmount === "" ? null : Number(moveAmount)}
                 onChangeUsd={(v) => setMoveAmount(v === null ? "" : String(v))}
                 autoFocus

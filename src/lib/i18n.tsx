@@ -584,6 +584,7 @@ const dict: Record<Lang, Record<string, string>> = {
     "exp.debtSettled": "Debt settled",
     "exp.overdue": "Overdue",
     "exp.debtSaved": "Debt saved",
+    "exp.editDebt": "Edit debt",
 
     // Savings (expense system)
     "nav.exp.savings": "Savings",
@@ -1225,6 +1226,7 @@ const dict: Record<Lang, Record<string, string>> = {
     "exp.debtSettled": "បំណុលបានបញ្ចប់",
     "exp.overdue": "ហួសកំណត់",
     "exp.debtSaved": "រក្សាទុកបំណុល",
+    "exp.editDebt": "កែសម្រួលបំណុល",
 
     // Savings (expense system)
     "nav.exp.savings": "ការសន្សំ",

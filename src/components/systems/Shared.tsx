@@ -50,19 +50,19 @@ export function StatCard({
   return (
     <FadeIn delay={delay}>
       <Card className="card-soft rounded-2xl border-border/60 transition-shadow hover:shadow-md">
-        <CardContent className="flex items-center gap-3 p-4">
+        <CardContent className="flex items-center gap-2.5 p-3 sm:gap-3 sm:p-4">
           <span
             className={cn(
-              "flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted",
+              "flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted sm:size-10",
               tint,
               tone,
             )}
           >
             <Icon className="size-5" />
           </span>
-          <div className="min-w-0">
-            <p className="truncate text-xs font-medium text-muted-foreground">{label}</p>
-            <p className="truncate text-lg font-bold leading-tight tracking-tight">{value}</p>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[11px] font-medium text-muted-foreground sm:text-xs">{label}</p>
+            <p className="truncate text-base font-bold leading-tight tracking-tight sm:text-lg">{value}</p>
             {sub && <p className="truncate text-[11px] text-muted-foreground">{sub}</p>}
           </div>
         </CardContent>

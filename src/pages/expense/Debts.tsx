@@ -132,10 +132,10 @@ export default function ExpenseDebts() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
         <StatCard label={t("exp.iOwe")} value={moneyShort(totals.youOwe)} icon={ArrowUpRight} tone="text-rose-600 dark:text-rose-400" tint="bg-rose-500/12" />
         <StatCard label={t("exp.owedToMe")} value={moneyShort(totals.owedToYou)} icon={ArrowDownLeft} tone="text-emerald-600 dark:text-emerald-400" tint="bg-emerald-500/12" />
-        <StatCard label={t("exp.debts")} value={String(openDebts.length)} icon={HandCoins} tone="text-sky-600 dark:text-sky-400" tint="bg-sky-500/12" />
+        <StatCard label={t("exp.debts")} value={String(openDebts.length)} icon={HandCoins} tone="text-sky-600 dark:text-sky-400" tint="bg-sky-500/12" className="col-span-2 sm:col-span-1" />
       </div>
 
       <div className="space-y-2.5">
@@ -159,7 +159,7 @@ export default function ExpenseDebts() {
                     {d.direction === "payable" ? <ArrowUpRight className="size-5" /> : <ArrowDownLeft className="size-5" />}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <p className="truncate text-sm font-semibold">{d.name}</p>
                       <span
                         className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
@@ -181,41 +181,41 @@ export default function ExpenseDebts() {
                         </span>
                       )}
                     </div>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
                       {d.dueDate ? `${t("exp.dueDate")}: ${d.dueDate}` : ""}
                       {d.note ? `${d.dueDate ? " · " : ""}${d.note}` : ""}
                     </p>
                   </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <p className="text-sm font-bold tabular-nums">{money(remaining)}</p>
-                    <Button variant="ghost" size="icon" className="size-7 rounded-lg" onClick={() => openEdit(d)}>
-                      <Pencil className="size-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="size-7 rounded-lg text-destructive"
-                      onClick={() => deleteDebt(d.id)}
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
-                  </div>
+                  <p className="shrink-0 text-base font-bold tabular-nums">{money(remaining)}</p>
+                  <Button variant="ghost" size="icon" className="size-7 shrink-0 rounded-lg" onClick={() => openEdit(d)}>
+                    <Pencil className="size-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7 shrink-0 rounded-lg text-destructive"
+                    onClick={() => deleteDebt(d.id)}
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
                 </div>
                 {!settled && (
-                  <div className="mt-3 flex items-center gap-3">
-                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-primary transition-all"
-                        style={{ width: `${Math.min(100, pct)}%` }}
-                      />
+                  <div className="mt-3 space-y-2">
+                    <div className="flex items-center gap-3">
+                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-primary transition-all"
+                          style={{ width: `${Math.min(100, pct)}%` }}
+                        />
+                      </div>
+                      <span className="shrink-0 text-[10px] font-semibold text-muted-foreground">
+                        {t("exp.paid")} {money(d.paid)} / {money(d.total)}
+                      </span>
                     </div>
-                    <span className="text-[10px] font-semibold text-muted-foreground">
-                      {t("exp.paid")} {money(d.paid)} / {money(d.total)}
-                    </span>
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-7 gap-1 rounded-lg px-2.5 text-xs"
+                      className="h-8 w-full gap-1 rounded-lg px-2.5 text-xs sm:w-auto"
                       onClick={() => {
                         setPayFor(d);
                         setPayAmount(String(Math.max(0, remaining)));

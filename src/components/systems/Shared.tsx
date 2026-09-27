@@ -38,6 +38,7 @@ export function StatCard({
   tint,
   sub,
   delay = 0,
+  className,
 }: {
   label: string;
   value: string;
@@ -46,9 +47,11 @@ export function StatCard({
   tint?: string;
   sub?: string;
   delay?: number;
+  /** Extra classes for the wrapper (e.g. col-span within the stat grid). */
+  className?: string;
 }) {
   return (
-    <FadeIn delay={delay}>
+    <FadeIn delay={delay} className={className}>
       <Card className="card-soft rounded-2xl border-border/60 transition-shadow hover:shadow-md">
         <CardContent className="flex items-center gap-2.5 p-3 sm:gap-3 sm:p-4">
           <span

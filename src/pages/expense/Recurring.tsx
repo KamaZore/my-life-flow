@@ -249,26 +249,25 @@ export default function ExpenseRecurring() {
                 </button>
               ))}
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <MoneyInput
-                valueUsd={form.amount === "" ? null : Number(form.amount)}
-                onChangeUsd={(v) => setForm({ ...form, amount: v === null ? "" : String(v) })}
+            <MoneyInput
+              label={t("exp.amount")}
+              valueUsd={form.amount === "" ? null : Number(form.amount)}
+              onChangeUsd={(v) => setForm({ ...form, amount: v === null ? "" : String(v) })}
+            />
+            <div className="space-y-1.5">
+              <Label htmlFor="rec-day">{t("exp.dayOfMonth")}</Label>
+              <Input
+                id="rec-day"
+                type="number"
+                min={1}
+                max={31}
+                value={form.dayOfMonth}
+                onChange={(e) => setForm({ ...form, dayOfMonth: e.target.value })}
+                className="h-10 rounded-xl"
+                inputMode="numeric"
               />
-              <div className="space-y-1.5">
-                <Label htmlFor="rec-day">{t("exp.dayOfMonth")}</Label>
-                <Input
-                  id="rec-day"
-                  type="number"
-                  min={1}
-                  max={31}
-                  value={form.dayOfMonth}
-                  onChange={(e) => setForm({ ...form, dayOfMonth: e.target.value })}
-                  className="h-10 rounded-xl"
-                  inputMode="numeric"
-                />
-              </div>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>{t("exp.category")}</Label>
                 <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>

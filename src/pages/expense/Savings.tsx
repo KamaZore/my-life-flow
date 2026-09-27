@@ -163,7 +163,7 @@ export default function ExpenseSavings() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
         <StatCard
           label={t("sav.totalSaved")}
           value={moneyShort(totals.saved)}
@@ -184,6 +184,7 @@ export default function ExpenseSavings() {
           icon={CheckCircle2}
           tone="text-violet-600 dark:text-violet-400"
           tint="bg-violet-500/12"
+          className="col-span-2 sm:col-span-1"
         />
       </div>
 

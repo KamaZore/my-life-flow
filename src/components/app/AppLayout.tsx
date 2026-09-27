@@ -252,6 +252,7 @@ export function AppLayout({ children }: { children?: ReactNode }) {
             </button>
           )}
           <div className="flex items-center gap-2">
+          <NotificationBell />
           <Button
             variant="outline"
             size="icon"

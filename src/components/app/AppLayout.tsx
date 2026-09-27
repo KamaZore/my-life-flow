@@ -325,7 +325,7 @@ export function AppLayout({ children }: { children?: ReactNode }) {
           No safe-x here: the body already pads by the safe-area inset, so
           adding it again doubled the side margins on notched phones. */}
       <main className="px-4 pb-safe pt-4 md:ml-60 md:px-8 md:pb-16 md:pt-8">
-        <div className="relative mx-auto min-h-[50vh] max-w-5xl">
+        <div className="relative min-h-[50vh]">
           {children ?? <Outlet />}
         </div>
       </main>

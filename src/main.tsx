@@ -42,9 +42,11 @@ const ExpenseRecurring = lazy(() => import("./pages/expense/Recurring.tsx"));
 const ExpenseDebts = lazy(() => import("./pages/expense/Debts.tsx"));
 const ExpenseSavings = lazy(() => import("./pages/expense/Savings.tsx"));
 const SalonDashboard = lazy(() => import("./pages/salon/Dashboard.tsx"));
-const SalonAppointments = lazy(() => import("./pages/salon/Appointments.tsx"));
+const SalonPOS = lazy(() => import("./pages/salon/POS.tsx"));
+const SalonSales = lazy(() => import("./pages/salon/Sales.tsx"));
 const SalonCustomers = lazy(() => import("./pages/salon/Customers.tsx"));
 const SalonServices = lazy(() => import("./pages/salon/Services.tsx"));
+const SalonProducts = lazy(() => import("./pages/salon/Products.tsx"));
 const SalonStaffPage = lazy(() => import("./pages/salon/Staff.tsx"));
 const SalonReports = lazy(() => import("./pages/salon/Reports.tsx"));
 const SalonSettings = lazy(() => import("./pages/salon/Settings.tsx"));
@@ -318,9 +320,11 @@ function AppRoutes() {
 
       {/* Salon Management system — same AppLayout chrome as the other systems. */}
       <Route path="/salon/dashboard" element={<RequireSystem system="salon"><AppLayout><SalonDashboard /></AppLayout></RequireSystem>} />
-      <Route path="/salon/appointments" element={<RequireSystem system="salon"><AppLayout><SalonAppointments /></AppLayout></RequireSystem>} />
+      <Route path="/salon/pos" element={<RequireSystem system="salon"><AppLayout><SalonPOS /></AppLayout></RequireSystem>} />
+      <Route path="/salon/sales" element={<RequireSystem system="salon"><AppLayout><SalonSales /></AppLayout></RequireSystem>} />
       <Route path="/salon/customers" element={<RequireSystem system="salon"><AppLayout><SalonCustomers /></AppLayout></RequireSystem>} />
       <Route path="/salon/services" element={<RequireSystem system="salon"><AppLayout><SalonServices /></AppLayout></RequireSystem>} />
+      <Route path="/salon/products" element={<RequireSystem system="salon"><AppLayout><SalonProducts /></AppLayout></RequireSystem>} />
       <Route path="/salon/staff" element={<RequireSystem system="salon"><AppLayout><SalonStaffPage /></AppLayout></RequireSystem>} />
       <Route path="/salon/reports" element={<RequireSystem system="salon"><AppLayout><SalonReports /></AppLayout></RequireSystem>} />
       <Route path="/salon/settings" element={<RequireSystem system="salon"><AppLayout><SalonSettings /></AppLayout></RequireSystem>} />

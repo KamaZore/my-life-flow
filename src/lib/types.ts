@@ -527,34 +527,68 @@ export type SalonStaff = {
   updatedAt: number;
 };
 
-export type SalonAppointmentStatus = "booked" | "done" | "cancelled";
-
-export type SalonAppointment = {
+/** Retail product sold at the counter (shampoo, cream…). Tracks stock. */
+export type SalonProduct = {
   id: string;
-  customerId: string;
-  serviceId: string;
-  staffId?: string;
-  /** ISO date (yyyy-mm-dd) */
-  date: string;
-  /** HH:mm 24h */
-  time: string;
-  status: SalonAppointmentStatus;
-  /** price captured at booking (USD) */
+  name: string;
   price: number;
-  note?: string;
+  cost?: number;
+  stock: number;
+  /** alert when stock falls to or below this */
+  lowStockThreshold: number;
+  sku?: string;
+  image?: string;
+  active?: boolean;
   createdAt: number;
   updatedAt: number;
+};
+
+/** One line in a walk-in sale: a service (performed) or a product (stock −1). */
+export type SalonSaleLine = {
+  /** SalonService id when kind="service", SalonProduct id when kind="product" */
+  itemId: string;
+  kind: "service" | "product";
+  name: string;
+  /** unit price captured at sale time */
+  price: number;
+  qty: number;
+  /** percent 0-100 */
+  discount: number;
+  /** staff who performed the service (services only) */
+  staffId?: string;
+};
+
+/** A completed walk-in sale (no booking). */
+export type SalonSale = {
+  id: string;
+  /** sequential receipt number */
+  number: number;
+  customerId?: string;
+  lines: SalonSaleLine[];
+  subtotal: number;
+  discountTotal: number;
+  total: number;
+  method: PaymentMethod;
+  /** ISO date (yyyy-mm-dd) */
+  date: string;
+  createdAt: number;
 };
 
 export type SalonData = {
   shopName: string;
   services: SalonService[];
+  products: SalonProduct[];
   customers: SalonCustomer[];
   staff: SalonStaff[];
-  appointments: SalonAppointment[];
+  sales: SalonSale[];
+  /** last receipt number issued */
+  saleCounter: number;
 };
 
-export const APPOINTMENT_STATUSES: SalonAppointmentStatus[] = ["booked", "done", "cancelled"];
+export function salonLineTotal(l: SalonSaleLine): number {
+  const gross = l.price * l.qty;
+  return Math.round(gross * (1 - l.discount / 100) * 100) / 100;
+}
 
 export const SALON_SERVICE_COLORS = ["#ec4899", "#8b5cf6", "#0ea5e9", "#10b981", "#f59e0b", "#14b8a6"];
 

@@ -32,12 +32,15 @@ export default function SalonStaff() {
       ? Math.round(salon.staff.reduce((s, x) => s + x.commission, 0) / salon.staff.length)
       : 0;
 
-  // This month's completed revenue per staff member
+  // This month's service revenue per staff member (from walk-in sales)
   const month = new Date().toISOString().slice(0, 7);
   const revenueByStaff = new Map<string, number>();
-  for (const a of salon.appointments) {
-    if (a.status !== "done" || !a.staffId || !a.date.startsWith(month)) continue;
-    revenueByStaff.set(a.staffId, (revenueByStaff.get(a.staffId) ?? 0) + a.price);
+  for (const sale of salon.sales) {
+    if (!sale.date.startsWith(month)) continue;
+    for (const l of sale.lines) {
+      if (l.kind !== "service" || !l.staffId) continue;
+      revenueByStaff.set(l.staffId, (revenueByStaff.get(l.staffId) ?? 0) + l.price * l.qty);
+    }
   }
   const monthDone = [...revenueByStaff.values()].reduce((s, v) => s + v, 0);
 

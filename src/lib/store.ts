@@ -39,9 +39,11 @@ import type {
   Recurrence,
   RecurringTx,
   SavingGoal,
-  SalonAppointment,
   SalonCustomer,
   SalonData,
+  SalonProduct,
+  SalonSale,
+  SalonSaleLine,
   SalonService,
   SalonStaff,
   StaffMember,
@@ -813,10 +815,14 @@ function seedData(): AppData {
         { id: "sv-wash", name: "Wash & style", price: 5, duration: 20, color: "#0ea5e9", createdAt: t - 40 * 864e5, updatedAt: t },
         { id: "sv-facial", name: "Facial", price: 15, duration: 60, color: "#10b981", createdAt: t - 40 * 864e5, updatedAt: t },
       ],
+      products: [
+        { id: "sp-shampoo", name: "Shampoo 250ml", price: 6, cost: 3.5, stock: 12, lowStockThreshold: 4, sku: "SH-250", createdAt: t - 40 * 864e5, updatedAt: t },
+        { id: "sp-serum", name: "Hair serum", price: 9, cost: 5, stock: 3, lowStockThreshold: 5, sku: "SR-001", createdAt: t - 40 * 864e5, updatedAt: t },
+        { id: "sp-cream", name: "Face cream", price: 11, cost: 6.5, stock: 8, lowStockThreshold: 3, sku: "FC-100", createdAt: t - 40 * 864e5, updatedAt: t },
+      ],
       customers: [
         { id: "sc-sokha", name: "Sokha", phone: "011 234 567", visits: 6, spent: 74, lastVisit: addDaysKey(today, -6), createdAt: t - 90 * 864e5, updatedAt: t },
         { id: "sc-dara", name: "Dara", phone: "012 345 678", visits: 3, spent: 51, lastVisit: addDaysKey(today, -15), createdAt: t - 60 * 864e5, updatedAt: t },
-        { id: "sc-chantha", name: "Chantha", phone: "077 888 999", visits: 1, spent: 8, lastVisit: addDaysKey(today, -30), createdAt: t - 30 * 864e5, updatedAt: t },
         { id: "sc-malis", name: "Malis", phone: "096 111 222", visits: 9, spent: 168, lastVisit: addDaysKey(today, -2), createdAt: t - 120 * 864e5, updatedAt: t },
       ],
       staff: [
@@ -824,14 +830,27 @@ function seedData(): AppData {
         { id: "ss-ratha", name: "Ratha", role: "Colorist", phone: "012 222 333", commission: 35, createdAt: t - 80 * 864e5, updatedAt: t },
         { id: "ss-kanha", name: "Kanha", role: "Nail artist", commission: 30, createdAt: t - 70 * 864e5, updatedAt: t },
       ],
-      appointments: [
-        { id: "sa-1", customerId: "sc-malis", serviceId: "sv-color", staffId: "ss-ratha", date: today, time: "09:00", status: "done", price: 25, createdAt: t - 3 * 864e5, updatedAt: t },
-        { id: "sa-2", customerId: "sc-sokha", serviceId: "sv-haircut", staffId: "ss-davy", date: today, time: "11:00", status: "booked", price: 8, createdAt: t - 2 * 864e5, updatedAt: t },
-        { id: "sa-3", customerId: "sc-dara", serviceId: "sv-facial", staffId: "ss-davy", date: today, time: "14:00", status: "booked", price: 15, createdAt: t - 2 * 864e5, updatedAt: t },
-        { id: "sa-4", customerId: "sc-chantha", serviceId: "sv-wash", date: addDaysKey(today, 1), time: "10:00", status: "booked", price: 5, createdAt: t - 864e5, updatedAt: t },
-        { id: "sa-5", customerId: "sc-sokha", serviceId: "sv-haircut", staffId: "ss-davy", date: addDaysKey(today, -6), time: "15:00", status: "done", price: 8, createdAt: t - 7 * 864e5, updatedAt: t },
-        { id: "sa-6", customerId: "sc-malis", serviceId: "sv-facial", staffId: "ss-kanha", date: addDaysKey(today, -2), time: "13:00", status: "cancelled", price: 15, createdAt: t - 4 * 864e5, updatedAt: t },
+      sales: [
+        {
+          id: "ss-1", number: 1, customerId: "sc-malis",
+          lines: [
+            { itemId: "sv-color", kind: "service", name: "Hair coloring", price: 25, qty: 1, discount: 0, staffId: "ss-ratha" },
+            { itemId: "sp-shampoo", kind: "product", name: "Shampoo 250ml", price: 6, qty: 1, discount: 0 },
+          ],
+          subtotal: 31, discountTotal: 0, total: 31, method: "cash", date: today, createdAt: t - 5 * 36e5,
+        },
+        {
+          id: "ss-2", number: 2, customerId: "sc-sokha",
+          lines: [{ itemId: "sv-haircut", kind: "service", name: "Haircut", price: 8, qty: 1, discount: 0, staffId: "ss-davy" }],
+          subtotal: 8, discountTotal: 0, total: 8, method: "cash", date: addDaysKey(today, -1), createdAt: t - 30 * 36e5,
+        },
+        {
+          id: "ss-3", number: 3, customerId: "sc-dara",
+          lines: [{ itemId: "sv-facial", kind: "service", name: "Facial", price: 15, qty: 1, discount: 20, staffId: "ss-davy" }],
+          subtotal: 15, discountTotal: 3, total: 12, method: "card", date: addDaysKey(today, -3), createdAt: t - 80 * 36e5,
+        },
       ],
+      saleCounter: 3,
     },
   };
 }
@@ -905,9 +924,12 @@ export function normalizeData(parsed: Partial<AppData> | null | undefined): AppD
       ...fresh.salon,
       ...(parsed.salon ?? {}),
       services: Array.isArray(parsed.salon?.services) ? parsed.salon.services : [],
+      products: Array.isArray(parsed.salon?.products) ? parsed.salon.products : [],
       customers: Array.isArray(parsed.salon?.customers) ? parsed.salon.customers : [],
       staff: Array.isArray(parsed.salon?.staff) ? parsed.salon.staff : [],
-      appointments: Array.isArray(parsed.salon?.appointments) ? parsed.salon.appointments : [],
+      sales: Array.isArray(parsed.salon?.sales) ? parsed.salon.sales : [],
+      saleCounter:
+        typeof parsed.salon?.saleCounter === "number" ? parsed.salon.saleCounter : 0,
     },
   };
 }
@@ -962,9 +984,11 @@ function emptyData(): AppData {
     salon: {
       shopName: "",
       services: [],
+      products: [],
       customers: [],
       staff: [],
-      appointments: [],
+      sales: [],
+      saleCounter: 0,
     },
   };
 }
@@ -1889,9 +1913,11 @@ export function clearAllData() {
     salon: {
       ...data.salon,
       services: [],
+      products: [],
       customers: [],
       staff: [],
-      appointments: [],
+      sales: [],
+      saleCounter: 0,
     },
     tasks: [],
     inboxItems: [],
@@ -2540,7 +2566,7 @@ export function dailyTotals(
 /* ================================================================== */
 
 /* ------------------------------------------------------------------ */
-/* Salon Management system                                             */
+/* Salon Management system (walk-in POS model)                         */
 /* ------------------------------------------------------------------ */
 
 export function useSalon(): SalonData {
@@ -2550,6 +2576,8 @@ export function useSalon(): SalonData {
 export function updateSalonSettings(patch: Partial<Pick<SalonData, "shopName">>) {
   set((d) => ({ ...d, salon: { ...d.salon, ...patch } }));
 }
+
+/* ----- services ----- */
 
 export function addSalonService(input: Omit<SalonService, "id" | "createdAt" | "updatedAt">): SalonService {
   const ts = nowTs();
@@ -2573,6 +2601,52 @@ export function deleteSalonService(id: string) {
   set((d) => ({ ...d, salon: { ...d.salon, services: d.salon.services.filter((x) => x.id !== id) } }));
 }
 
+/* ----- products (retail stock) ----- */
+
+export function useSalonProducts(): SalonProduct[] {
+  return useAppData().salon.products;
+}
+
+export function addSalonProduct(input: Omit<SalonProduct, "id" | "createdAt" | "updatedAt">): SalonProduct {
+  const ts = nowTs();
+  const prod: SalonProduct = { ...input, id: uid(), createdAt: ts, updatedAt: ts };
+  set((d) => ({ ...d, salon: { ...d.salon, products: [prod, ...d.salon.products] } }));
+  return prod;
+}
+
+export function updateSalonProduct(id: string, patch: Partial<SalonProduct>) {
+  const ts = nowTs();
+  set((d) => ({
+    ...d,
+    salon: {
+      ...d.salon,
+      products: d.salon.products.map((x) => (x.id === id ? { ...x, ...patch, updatedAt: ts } : x)),
+    },
+  }));
+}
+
+export function deleteSalonProduct(id: string) {
+  set((d) => ({ ...d, salon: { ...d.salon, products: d.salon.products.filter((x) => x.id !== id) } }));
+}
+
+/** Stock movement: positive restocks, negative removes (clamped at 0). */
+export function adjustSalonStock(id: string, delta: number): number {
+  const prod = data.salon.products.find((x) => x.id === id);
+  if (!prod) return 0;
+  const next = Math.max(0, prod.stock + delta);
+  const ts = nowTs();
+  set((d) => ({
+    ...d,
+    salon: {
+      ...d.salon,
+      products: d.salon.products.map((x) => (x.id === id ? { ...x, stock: next, updatedAt: ts } : x)),
+    },
+  }));
+  return next;
+}
+
+/* ----- customers ----- */
+
 export function addSalonCustomer(input: Omit<SalonCustomer, "id" | "visits" | "spent" | "createdAt" | "updatedAt">): SalonCustomer {
   const ts = nowTs();
   const c: SalonCustomer = { ...input, id: uid(), visits: 0, spent: 0, createdAt: ts, updatedAt: ts };
@@ -2594,6 +2668,8 @@ export function updateSalonCustomer(id: string, patch: Partial<SalonCustomer>) {
 export function deleteSalonCustomer(id: string) {
   set((d) => ({ ...d, salon: { ...d.salon, customers: d.salon.customers.filter((x) => x.id !== id) } }));
 }
+
+/* ----- staff ----- */
 
 export function addSalonStaff(input: Omit<SalonStaff, "id" | "createdAt" | "updatedAt">): SalonStaff {
   const ts = nowTs();
@@ -2617,73 +2693,107 @@ export function deleteSalonStaff(id: string) {
   set((d) => ({ ...d, salon: { ...d.salon, staff: d.salon.staff.filter((x) => x.id !== id) } }));
 }
 
-/**
- * Book or edit an appointment. Completing an appointment (status → "done"
- * from "booked") rolls the customer stats forward: visits +1, spent +price,
- * lastVisit = appointment date. Moving back out of "done" undoes it.
- */
-export function saveSalonAppointment(input: Omit<SalonAppointment, "id" | "createdAt" | "updatedAt"> & { id?: string }): SalonAppointment {
-  const ts = nowTs();
-  const existing = input.id ? data.salon.appointments.find((x) => x.id === input.id) : undefined;
-  const appt: SalonAppointment = existing
-    ? { ...existing, ...input, id: existing.id, createdAt: existing.createdAt, updatedAt: ts }
-    : { ...input, id: uid(), createdAt: ts, updatedAt: ts };
+/* ----- walk-in sales (POS checkout) ----- */
 
-  const wasDone = existing?.status === "done";
-  const isDone = appt.status === "done";
+/**
+ * Complete a walk-in sale: records the receipt, decrements product stock,
+ * and rolls customer stats forward (visits +1, spent +total, lastVisit).
+ * Product lines must have stock available — the caller checks, this clamps.
+ */
+export function checkoutSalonSale(input: {
+  lines: SalonSaleLine[];
+  customerId?: string;
+  method: PaymentMethod;
+  date?: string;
+}): SalonSale {
+  const ts = nowTs();
+  const date = input.date ?? todayKey();
+
+  const lines = input.lines.map((l) => ({
+    ...l,
+    qty: Math.max(1, Math.round(l.qty)),
+    discount: Math.min(100, Math.max(0, l.discount)),
+  }));
+  const subtotal = Math.round(lines.reduce((s, l) => s + l.price * l.qty, 0) * 100) / 100;
+  const discountTotal =
+    Math.round(lines.reduce((s, l) => s + (l.price * l.qty * l.discount) / 100, 0) * 100) / 100;
+  const total = Math.round((subtotal - discountTotal) * 100) / 100;
+
+  const sale: SalonSale = {
+    id: uid(),
+    number: data.salon.saleCounter + 1,
+    customerId: input.customerId,
+    lines,
+    subtotal,
+    discountTotal,
+    total,
+    method: input.method,
+    date,
+    createdAt: ts,
+  };
+
+  const productDeltas = new Map<string, number>();
+  for (const l of lines) {
+    if (l.kind === "product") productDeltas.set(l.itemId, (productDeltas.get(l.itemId) ?? 0) + l.qty);
+  }
 
   set((d) => ({
     ...d,
     salon: {
       ...d.salon,
-      appointments: existing
-        ? d.salon.appointments.map((x) => (x.id === appt.id ? appt : x))
-        : [appt, ...d.salon.appointments],
-      customers: d.salon.customers.map((c) => {
-        if (c.id !== appt.customerId) return c;
-        if (!wasDone && isDone) {
-          return {
-            ...c,
-            visits: c.visits + 1,
-            spent: Math.round((c.spent + appt.price) * 100) / 100,
-            lastVisit: appt.date,
-            updatedAt: ts,
-          };
-        }
-        if (wasDone && !isDone) {
-          return {
-            ...c,
-            visits: Math.max(0, c.visits - 1),
-            spent: Math.max(0, Math.round((c.spent - appt.price) * 100) / 100),
-            updatedAt: ts,
-          };
-        }
-        return c;
+      sales: [sale, ...d.salon.sales],
+      saleCounter: sale.number,
+      products: d.salon.products.map((p) => {
+        const used = productDeltas.get(p.id);
+        return used ? { ...p, stock: Math.max(0, p.stock - used), updatedAt: ts } : p;
       }),
+      customers: input.customerId
+        ? d.salon.customers.map((c) =>
+            c.id === input.customerId
+              ? {
+                  ...c,
+                  visits: c.visits + 1,
+                  spent: Math.round((c.spent + sale.total) * 100) / 100,
+                  lastVisit: date,
+                  updatedAt: ts,
+                }
+              : c,
+          )
+        : d.salon.customers,
     },
   }));
-  return appt;
+  return sale;
 }
 
-export function deleteSalonAppointment(id: string) {
-  const appt = data.salon.appointments.find((x) => x.id === id);
-  if (!appt) return;
+export function deleteSalonSale(id: string) {
+  const sale = data.salon.sales.find((x) => x.id === id);
+  if (!sale) return;
   const ts = nowTs();
+  const productDeltas = new Map<string, number>();
+  for (const l of sale.lines) {
+    if (l.kind === "product") productDeltas.set(l.itemId, (productDeltas.get(l.itemId) ?? 0) + l.qty);
+  }
   set((d) => ({
     ...d,
     salon: {
       ...d.salon,
-      appointments: d.salon.appointments.filter((x) => x.id !== id),
-      customers: d.salon.customers.map((c) =>
-        c.id === appt.customerId && appt.status === "done"
-          ? {
-              ...c,
-              visits: Math.max(0, c.visits - 1),
-              spent: Math.max(0, Math.round((c.spent - appt.price) * 100) / 100),
-              updatedAt: ts,
-            }
-          : c,
-      ),
+      sales: d.salon.sales.filter((x) => x.id !== id),
+      products: d.salon.products.map((p) => {
+        const back = productDeltas.get(p.id);
+        return back ? { ...p, stock: p.stock + back, updatedAt: ts } : p;
+      }),
+      customers: sale.customerId
+        ? d.salon.customers.map((c) =>
+            c.id === sale.customerId
+              ? {
+                  ...c,
+                  visits: Math.max(0, c.visits - 1),
+                  spent: Math.max(0, Math.round((c.spent - sale.total) * 100) / 100),
+                  updatedAt: ts,
+                }
+              : c,
+          )
+        : d.salon.customers,
     },
   }));
 }

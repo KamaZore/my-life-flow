@@ -16,17 +16,19 @@ import { parseCapture } from "./parse";
 import {
   addProcessStep,
   addSalonCustomer,
+  addSalonProduct,
   addSalonService,
   addSalonStaff,
   addSavingGoal,
   addSubtask,
   addTask,
   addTransaction,
+  checkoutSalonSale,
   clearAllData,
   contributeSaving,
   deleteProject,
   deleteProcess,
-  deleteSalonAppointment,
+  deleteSalonSale,
   deleteSavingGoal,
   exportData,
   getData,
@@ -39,7 +41,6 @@ import {
   projectProgress,
   reorderTasks,
   resetDemoData,
-  saveSalonAppointment,
   scheduleProcess,
   toggleHabitDate,
   toggleSubtask,
@@ -591,61 +592,68 @@ describe("store", () => {
     expect(t.completedAt).toBeDefined();
   });
 
-  test("salon: completing an appointment updates customer stats, undo reverses it", () => {
+  test("salon: walk-in sale decrements stock, updates customer stats, receipt numbers increment", () => {
     resetDemoData();
     const today = todayKey();
     const svc = addSalonService({ name: "Trim", price: 12, duration: 30 });
+    const prod = addSalonProduct({ name: "Serum", price: 9, cost: 5, stock: 5, lowStockThreshold: 2 });
     const cust = addSalonCustomer({ name: "Test Client" });
     const member = addSalonStaff({ name: "Stylist", commission: 50 });
 
-    const appt = saveSalonAppointment({
+    const before = getData().salon.saleCounter;
+    const sale = checkoutSalonSale({
+      lines: [
+        { itemId: svc.id, kind: "service", name: "Trim", price: 12, qty: 1, discount: 0, staffId: member.id },
+        { itemId: prod.id, kind: "product", name: "Serum", price: 9, qty: 2, discount: 0 },
+      ],
       customerId: cust.id,
-      serviceId: svc.id,
-      staffId: member.id,
+      method: "cash",
       date: today,
-      time: "10:00",
-      status: "booked",
-      price: 12,
     });
 
-    let c = getData().salon.customers.find((x) => x.id === cust.id)!;
-    expect(c.visits).toBe(0);
-    expect(c.spent).toBe(0);
+    // Receipt number increments, totals computed with discount math
+    expect(sale.number).toBe(before + 1);
+    expect(sale.subtotal).toBe(30);
+    expect(sale.total).toBe(30);
 
-    // Complete it → stats roll forward
-    saveSalonAppointment({ ...appt, status: "done" });
-    c = getData().salon.customers.find((x) => x.id === cust.id)!;
+    // Product stock decremented by qty
+    expect(getData().salon.products.find((p) => p.id === prod.id)?.stock).toBe(3);
+
+    // Customer stats rolled forward
+    const c = getData().salon.customers.find((x) => x.id === cust.id)!;
     expect(c.visits).toBe(1);
-    expect(c.spent).toBe(12);
+    expect(c.spent).toBe(30);
     expect(c.lastVisit).toBe(today);
 
-    // Move back to booked → stats roll back
-    saveSalonAppointment({ ...appt, status: "booked" });
-    c = getData().salon.customers.find((x) => x.id === cust.id)!;
-    expect(c.visits).toBe(0);
-    expect(c.spent).toBe(0);
-
-    // Complete again, then delete → stats reverse
-    saveSalonAppointment({ ...appt, status: "done" });
-    deleteSalonAppointment(appt.id);
-    c = getData().salon.customers.find((x) => x.id === cust.id)!;
-    expect(c.visits).toBe(0);
-    expect(c.spent).toBe(0);
-    expect(getData().salon.appointments.find((x) => x.id === appt.id)).toBeUndefined();
+    // Deleting the sale refunds stock and reverses customer stats
+    deleteSalonSale(sale.id);
+    expect(getData().salon.products.find((p) => p.id === prod.id)?.stock).toBe(5);
+    const c2 = getData().salon.customers.find((x) => x.id === cust.id)!;
+    expect(c2.visits).toBe(0);
+    expect(c2.spent).toBe(0);
   });
 
-  test("salon: normalizeData fills missing salon slice and keeps existing data", () => {
+  test("salon: discount math and normalizeData round-trip", () => {
     resetDemoData();
-    const svc = addSalonService({ name: "Color", price: 30, duration: 90 });
-    const exported = JSON.parse(exportData()) as { salon?: { services?: unknown[] } };
+    const prod = addSalonProduct({ name: "Cream", price: 10, stock: 10, lowStockThreshold: 2 });
+
+    // 20% discount on 10 = 8 total
+    const sale = checkoutSalonSale({
+      lines: [{ itemId: prod.id, kind: "product", name: "Cream", price: 10, qty: 1, discount: 20 }],
+      method: "card",
+    });
+    expect(sale.subtotal).toBe(10);
+    expect(sale.discountTotal).toBe(2);
+    expect(sale.total).toBe(8);
+
+    const exported = JSON.parse(exportData()) as { salon?: { services?: unknown[]; sales?: unknown[] } };
     expect(Array.isArray(exported.salon?.services)).toBe(true);
-    expect(exported.salon?.services?.length).toBeGreaterThan(0);
+    expect(exported.salon?.sales?.length).toBeGreaterThan(0);
 
     // Strip salon entirely → importData must re-fill defaults, not crash
     delete exported.salon;
     expect(importData(JSON.stringify(exported))).toBe(true);
     expect(Array.isArray(getData().salon.services)).toBe(true);
-
-    void svc;
+    expect(Array.isArray(getData().salon.sales)).toBe(true);
   });
 });

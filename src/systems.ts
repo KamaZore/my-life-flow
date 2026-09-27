@@ -108,9 +108,11 @@ export const SYSTEMS: SystemDef[] = [
     root: "/salon",
     nav: [
       { labelKey: "nav.salon.dashboard", path: "/salon/dashboard", icon: LayoutDashboard },
-      { labelKey: "nav.salon.appointments", path: "/salon/appointments", icon: CalendarDays },
+      { labelKey: "nav.salon.pos", path: "/salon/pos", icon: ShoppingCart },
+      { labelKey: "nav.salon.sales", path: "/salon/sales", icon: Receipt },
       { labelKey: "nav.salon.customers", path: "/salon/customers", icon: Users },
       { labelKey: "nav.salon.services", path: "/salon/services", icon: Sparkles },
+      { labelKey: "nav.salon.products", path: "/salon/products", icon: Package },
       { labelKey: "nav.salon.staff", path: "/salon/staff", icon: UserCog },
       { labelKey: "nav.salon.reports", path: "/salon/reports", icon: TrendingUp },
       { labelKey: "nav.settings", path: "/salon/settings", icon: Settings },

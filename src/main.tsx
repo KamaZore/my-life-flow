@@ -40,6 +40,7 @@ const ExpenseReports = lazy(() => import("./pages/expense/Reports.tsx"));
 const ExpenseAccounts = lazy(() => import("./pages/expense/Accounts.tsx"));
 const ExpenseRecurring = lazy(() => import("./pages/expense/Recurring.tsx"));
 const ExpenseDebts = lazy(() => import("./pages/expense/Debts.tsx"));
+const ExpenseSavings = lazy(() => import("./pages/expense/Savings.tsx"));
 const BusinessDashboard = lazy(() => import("./pages/business/Dashboard.tsx"));
 const BusinessPOS = lazy(() => import("./pages/business/POS.tsx"));
 const BusinessSales = lazy(() => import("./pages/business/Sales.tsx"));
@@ -305,6 +306,7 @@ function AppRoutes() {
       <Route path="/expense/accounts" element={<RequireSystem system="expense"><AppLayout><ExpenseAccounts /></AppLayout></RequireSystem>} />
       <Route path="/expense/recurring" element={<RequireSystem system="expense"><AppLayout><ExpenseRecurring /></AppLayout></RequireSystem>} />
       <Route path="/expense/debts" element={<RequireSystem system="expense"><AppLayout><ExpenseDebts /></AppLayout></RequireSystem>} />
+      <Route path="/expense/savings" element={<RequireSystem system="expense"><AppLayout><ExpenseSavings /></AppLayout></RequireSystem>} />
       <Route path="/expense/settings" element={<RequireSystem system="expense"><AppLayout><ExpenseSettings /></AppLayout></RequireSystem>} />
 
       {/* Business Management / POS system — same AppLayout chrome as Life. */}

@@ -38,6 +38,7 @@ import type {
   QuoteStatus,
   Recurrence,
   RecurringTx,
+  SavingGoal,
   StaffMember,
   Subtask,
   Supplier,
@@ -749,6 +750,40 @@ function seedData(): AppData {
       { id: "debt-lending", name: "Sokha (lent)", direction: "receivable", total: 60, paid: 20, dueDate: addDaysKey(today, 10), note: "Lent for fuel", createdAt: t - 9 * 864e5, updatedAt: t },
       { id: "debt-installment", name: "Laptop installment", direction: "payable", total: 480, paid: 180, dueDate: addDaysKey(today, 20), note: "12-month plan", createdAt: t - 60 * 864e5, updatedAt: t },
     ],
+    savings: [
+      {
+        id: "sav-emergency",
+        name: "Emergency fund",
+        target: 500,
+        saved: 320,
+        color: "#10b981",
+        emoji: "🛟",
+        targetDate: addDaysKey(today, 90),
+        note: "Three months of safety",
+        contributions: [
+          { id: uid(), amount: 150, date: addDaysKey(today, -30), note: "Initial deposit", createdAt: t - 30 * 864e5 },
+          { id: uid(), amount: 120, date: addDaysKey(today, -12), note: "Payday bonus", createdAt: t - 12 * 864e5 },
+          { id: uid(), amount: 50, date: addDaysKey(today, -3), note: "Weekly save", createdAt: t - 3 * 864e5 },
+        ],
+        createdAt: t - 30 * 864e5,
+        updatedAt: t,
+      },
+      {
+        id: "sav-phone",
+        name: "New phone",
+        target: 260,
+        saved: 260,
+        color: "#0ea5e9",
+        emoji: "📱",
+        reachedAt: t - 2 * 864e5,
+        contributions: [
+          { id: uid(), amount: 100, date: addDaysKey(today, -40), createdAt: t - 40 * 864e5 },
+          { id: uid(), amount: 160, date: addDaysKey(today, -2), createdAt: t - 2 * 864e5 },
+        ],
+        createdAt: t - 40 * 864e5,
+        updatedAt: t,
+      },
+    ],
     business: {
       products,
       customers,
@@ -803,6 +838,7 @@ export function normalizeData(parsed: Partial<AppData> | null | undefined): AppD
     accounts: Array.isArray(parsed.accounts) ? parsed.accounts : [],
     recurring: Array.isArray(parsed.recurring) ? parsed.recurring : [],
     debts: Array.isArray(parsed.debts) ? parsed.debts : [],
+    savings: Array.isArray(parsed.savings) ? parsed.savings : [],
     business: {
       ...fresh.business,
       ...(parsed.business ?? {}),
@@ -865,6 +901,7 @@ function emptyData(): AppData {
     accounts: [],
     recurring: [],
     debts: [],
+    savings: [],
     business: {
       products: [],
       customers: [],
@@ -1799,6 +1836,7 @@ export function clearAllData() {
     accounts: [],
     recurring: [],
     debts: [],
+    savings: [],
     business: { ...data.business, products: [], customers: [], suppliers: [], orders: [], heldOrders: [], purchases: [], expenses: [], staff: [], quotes: [], orderCounter: 0, quoteCounter: 0 },
     tasks: [],
     inboxItems: [],
@@ -2163,6 +2201,87 @@ export function payDebt(id: string, amount: number): number {
     ),
   }));
   return paid - debt.paid;
+}
+
+/* ------------------------------------------------------------------ */
+/* Savings (goal pots inside the expense system)                       */
+/* ------------------------------------------------------------------ */
+
+export function useSavings(): SavingGoal[] {
+  return useAppData().savings;
+}
+
+export function addSavingGoal(
+  input: Omit<
+    SavingGoal,
+    "id" | "createdAt" | "updatedAt" | "saved" | "reachedAt" | "contributions" | "archived"
+  > & { saved?: number },
+): SavingGoal {
+  const ts = nowTs();
+  const goal: SavingGoal = {
+    ...input,
+    saved: Math.max(0, input.saved ?? 0),
+    contributions: [],
+    id: uid(),
+    createdAt: ts,
+    updatedAt: ts,
+  };
+  if (goal.saved >= goal.target && goal.target > 0) goal.reachedAt = ts;
+  set((d) => ({ ...d, savings: [goal, ...d.savings] }));
+  return goal;
+}
+
+export function updateSavingGoal(id: string, patch: Partial<SavingGoal>) {
+  set((d) => ({
+    ...d,
+    savings: d.savings.map((g) =>
+      g.id === id ? { ...g, ...patch, updatedAt: nowTs() } : g,
+    ),
+  }));
+}
+
+export function deleteSavingGoal(id: string) {
+  set((d) => ({ ...d, savings: d.savings.filter((g) => g.id !== id) }));
+}
+
+/**
+ * Contribute to (amount > 0) or withdraw from (amount < 0) a goal.
+ * Returns the delta actually applied — withdrawals clamp at the saved
+ * balance, and a goal that crosses its target gets stamped reachedAt.
+ */
+export function contributeSaving(id: string, amount: number): number {
+  const goal = data.savings.find((g) => g.id === id);
+  if (!goal || !Number.isFinite(amount) || amount === 0) return 0;
+  const applied =
+    amount > 0
+      ? amount
+      : Math.max(-goal.saved, amount); // never withdraw below zero
+  const saved = goal.saved + applied;
+  const ts = nowTs();
+  set((d) => ({
+    ...d,
+    savings: d.savings.map((g) =>
+      g.id === id
+        ? {
+            ...g,
+            saved,
+            reachedAt:
+              g.target > 0 && saved >= g.target ? (g.reachedAt ?? ts) : undefined,
+            contributions: [
+              {
+                id: uid(),
+                amount: applied,
+                date: todayKey(),
+                createdAt: ts,
+              },
+              ...g.contributions,
+            ],
+            updatedAt: ts,
+          }
+        : g,
+    ),
+  }));
+  return applied;
 }
 
 export function useStaff(): StaffMember[] {

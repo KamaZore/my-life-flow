@@ -409,6 +409,37 @@ export type Debt = {
   updatedAt: number;
 };
 
+/**
+ * A named pot of money inside the expense system (emergency fund, phone,
+ * motorbike…). `saved` is the current balance; contributions and withdrawals
+ * are kept in `contributions` so the Savings page can show a small history.
+ */
+export type SavingGoal = {
+  id: ID;
+  name: string;
+  /** target amount in USD (stored currency) */
+  target: number;
+  saved: number;
+  color?: string;
+  /** optional emoji/icon placeholder for future icon pickers */
+  emoji?: string;
+  /** target date (yyyy-MM-dd) — optional deadline for the goal */
+  targetDate?: string;
+  note?: string;
+  reachedAt?: number;
+  archived?: boolean;
+  contributions: {
+    id: ID;
+    /** money in (+) or out (-) */
+    amount: number;
+    date: string; // yyyy-MM-dd
+    note?: string;
+    createdAt: number;
+  }[];
+  createdAt: number;
+  updatedAt: number;
+};
+
 /* ------------------------------------------------------------------ */
 /* Business extensions: staff, quotes                                  */
 /* ------------------------------------------------------------------ */
@@ -474,6 +505,8 @@ export type AppData = {
   accounts: Account[];
   recurring: RecurringTx[];
   debts: Debt[];
+  /** savings pots tracked inside the expense system */
+  savings: SavingGoal[];
   business: BusinessData;
 };
 

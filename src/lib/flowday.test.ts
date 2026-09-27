@@ -15,11 +15,14 @@ import {
 import { parseCapture } from "./parse";
 import {
   addProcessStep,
+  addSavingGoal,
   addSubtask,
   addTask,
   clearAllData,
+  contributeSaving,
   deleteProject,
   deleteProcess,
+  deleteSavingGoal,
   exportData,
   getData,
   goalProgress,
@@ -35,6 +38,7 @@ import {
   toggleHabitDate,
   toggleSubtask,
   toggleTask,
+  updateSavingGoal,
   updateSettings,
   updateTask,
 } from "./store";
@@ -413,6 +417,73 @@ describe("store", () => {
     expect(d.projects.length).toBe(0);
     expect(d.seeded).toBe(false);
     expect(d.settings.name).toBe("Keep me");
+  });
+
+  test("addSavingGoal stores a goal and stamps reachedAt when pre-filled", () => {
+    const goal = addSavingGoal({ name: "Motorbike", target: 1000, color: "#10b981" });
+    expect(goal.saved).toBe(0);
+    expect(goal.reachedAt).toBeUndefined();
+    expect(getData().savings.some((g) => g.id === goal.id)).toBe(true);
+
+    const done = addSavingGoal({ name: "Done already", target: 100, saved: 100 });
+    expect(done.saved).toBe(100);
+    expect(done.reachedAt).toBeDefined();
+  });
+
+  test("contributeSaving adds money, logs history, and stamps reachedAt", () => {
+    const goal = addSavingGoal({ name: "Emergency", target: 200 });
+    const applied = contributeSaving(goal.id, 120);
+    expect(applied).toBe(120);
+
+    const stored = getData().savings.find((g) => g.id === goal.id);
+    expect(stored?.saved).toBe(120);
+    expect(stored?.contributions.length).toBe(1);
+    expect(stored?.contributions[0]?.amount).toBe(120);
+    expect(stored?.reachedAt).toBeUndefined();
+
+    const second = contributeSaving(goal.id, 80);
+    expect(second).toBe(80);
+    const finished = getData().savings.find((g) => g.id === goal.id);
+    expect(finished?.saved).toBe(200);
+    expect(finished?.reachedAt).toBeDefined();
+    expect(finished?.contributions.length).toBe(2);
+  });
+
+  test("contributeSaving clamps withdrawals at the saved balance", () => {
+    const goal = addSavingGoal({ name: "Phone", target: 300, saved: 50 });
+    const applied = contributeSaving(goal.id, -90);
+    expect(applied).toBe(-50);
+    const stored = getData().savings.find((g) => g.id === goal.id);
+    expect(stored?.saved).toBe(0);
+    expect(stored?.contributions[0]?.amount).toBe(-50);
+
+    // Reaching the target then withdrawing clears reachedAt
+    contributeSaving(goal.id, 300);
+    expect(getData().savings.find((g) => g.id === goal.id)?.reachedAt).toBeDefined();
+    contributeSaving(goal.id, -100);
+    const after = getData().savings.find((g) => g.id === goal.id);
+    expect(after?.saved).toBe(200);
+    expect(after?.reachedAt).toBeUndefined();
+  });
+
+  test("updateSavingGoal and deleteSavingGoal work", () => {
+    const goal = addSavingGoal({ name: "Trip", target: 500 });
+    updateSavingGoal(goal.id, { name: "Japan trip", target: 800 });
+    let stored = getData().savings.find((g) => g.id === goal.id);
+    expect(stored?.name).toBe("Japan trip");
+    expect(stored?.target).toBe(800);
+
+    deleteSavingGoal(goal.id);
+    stored = getData().savings.find((g) => g.id === goal.id);
+    expect(stored).toBeUndefined();
+  });
+
+  test("normalizeData fills missing savings field for old documents", () => {
+    const old = JSON.parse(JSON.stringify(getData())) as Record<string, unknown>;
+    delete old.savings;
+    const imported = importData(JSON.stringify(old));
+    expect(imported).toBe(true);
+    expect(Array.isArray(getData().savings)).toBe(true);
   });
 
   test("habitStreak skips unscheduled days (weekly schedule)", () => {

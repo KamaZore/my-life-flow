@@ -1,4 +1,5 @@
 import { FadeIn, StatCard } from "@/components/systems/Shared";
+import { MoneyInput } from "@/components/systems/MoneyInput";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -276,34 +277,14 @@ export default function ExpenseDebts() {
                 autoFocus
               />
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="debt-total">{t("biz.total")}</Label>
-                <Input
-                  id="debt-total"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.total}
-                  onChange={(e) => setForm({ ...form, total: e.target.value })}
-                  className="h-10 rounded-xl"
-                  inputMode="decimal"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="debt-paid">{t("exp.paid")}</Label>
-                <Input
-                  id="debt-paid"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.paid}
-                  onChange={(e) => setForm({ ...form, paid: e.target.value })}
-                  className="h-10 rounded-xl"
-                  inputMode="decimal"
-                />
-              </div>
-            </div>
+            <MoneyInput
+              valueUsd={form.total === "" ? null : Number(form.total)}
+              onChangeUsd={(v) => setForm({ ...form, total: v === null ? "" : String(v) })}
+            />
+            <MoneyInput
+              valueUsd={form.paid === "" ? null : Number(form.paid)}
+              onChangeUsd={(v) => setForm({ ...form, paid: v === null ? "" : String(v) })}
+            />
             <div className="space-y-1.5">
               <Label htmlFor="debt-due">{t("exp.dueDate")}</Label>
               <Input
@@ -349,20 +330,11 @@ export default function ExpenseDebts() {
                   {t("exp.remaining")}: {money(payFor.total - payFor.paid)}
                 </p>
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="debt-pay">{t("exp.paymentAmount")}</Label>
-                <Input
-                  id="debt-pay"
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  value={payAmount}
-                  onChange={(e) => setPayAmount(e.target.value)}
-                  className="h-10 rounded-xl"
-                  inputMode="decimal"
-                  autoFocus
-                />
-              </div>
+              <MoneyInput
+                valueUsd={payAmount === "" ? null : Number(payAmount)}
+                onChangeUsd={(v) => setPayAmount(v === null ? "" : String(v))}
+                autoFocus
+              />
               <Button onClick={recordPayment} disabled={!(Number(payAmount) > 0)} className="w-full rounded-xl">
                 {t("common.save")}
               </Button>

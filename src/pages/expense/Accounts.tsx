@@ -1,4 +1,5 @@
 import { FadeIn, StatCard } from "@/components/systems/Shared";
+import { MoneyInput } from "@/components/systems/MoneyInput";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -173,18 +174,10 @@ export default function ExpenseAccounts() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="acc-balance">{t("exp.totalBalance")}</Label>
-              <Input
-                id="acc-balance"
-                type="number"
-                step="0.01"
-                value={form.balance}
-                onChange={(e) => setForm({ ...form, balance: e.target.value })}
-                className="h-10 rounded-xl"
-                inputMode="decimal"
-              />
-            </div>
+            <MoneyInput
+              valueUsd={form.balance === "" ? null : Number(form.balance)}
+              onChangeUsd={(v) => setForm({ ...form, balance: v === null ? "" : String(v) })}
+            />
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setOpen(false)} className="rounded-xl">

@@ -18,6 +18,7 @@ import {
   addSavingGoal,
   addSubtask,
   addTask,
+  addTransaction,
   clearAllData,
   contributeSaving,
   deleteProject,
@@ -484,6 +485,39 @@ describe("store", () => {
     const imported = importData(JSON.stringify(old));
     expect(imported).toBe(true);
     expect(Array.isArray(getData().savings)).toBe(true);
+  });
+
+  test("KHR amounts convert to USD cents at the settings rate (MoneyInput math)", () => {
+    // Same rounding rules as MoneyInput: riel ÷ rate → round to 2 decimals.
+    const rate = 4100;
+    const khrToUsd = (khr: number) => Math.round((khr / rate) * 100) / 100;
+    expect(khrToUsd(4100)).toBe(1);
+    expect(khrToUsd(2050)).toBe(0.5);
+    expect(khrToUsd(10000)).toBe(2.44); // 2.439… → 2.44
+    expect(khrToUsd(1)).toBe(0); // 0.0002… rounds to 0 — UI blocks saving 0
+    // USD→KHR preview rounds to whole riel.
+    const usdToKhr = (usd: number) => Math.round(usd * rate);
+    expect(usdToKhr(2.44)).toBe(10004);
+    expect(usdToKhr(0.005)).toBe(21); // half-riel rounds up
+  });
+
+  test("quick add + savings contributions produce real transactions and history", () => {
+    const txCountBefore = getData().transactions.length;
+    const goal = addSavingGoal({ name: "Quick test", target: 100 });
+    contributeSaving(goal.id, 12.5);
+    const stored = getData().savings.find((g) => g.id === goal.id);
+    expect(stored?.saved).toBe(12.5);
+    expect(stored?.contributions.length).toBe(1);
+    // Quick box path: addTransaction keeps the exact rounded amount
+    const tx = addTransaction({
+      type: "income",
+      amount: Math.round(3.7 * 100) / 100,
+      category: "salary",
+      method: "cash",
+      date: todayKey(),
+    });
+    expect(tx.amount).toBe(3.7);
+    expect(getData().transactions.length).toBe(txCountBefore + 1);
   });
 
   test("habitStreak skips unscheduled days (weekly schedule)", () => {

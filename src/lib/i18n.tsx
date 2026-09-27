@@ -613,6 +613,19 @@ const dict: Record<Lang, Record<string, string>> = {
     "sav.noHistory": "No transactions yet",
     "sav.errAmount": "Enter a valid amount",
 
+    // Currency toggle + quick money box
+    "cur.toggle": "Currency",
+    "cur.rate": "Rate",
+    "quick.moneyTitle": "Quick money in / out",
+    "quick.in": "Money in",
+    "quick.out": "Money out",
+    "quick.income": "Income",
+    "quick.expense": "Expense",
+    "quick.save": "Save",
+    "quick.done": "Saved",
+    "quick.savedToast": "Saved to transactions",
+    "quick.notePlaceholder": "Note (optional) — e.g. lunch, taxi, salary…",
+
     // Staff / quotes (business extensions)
     "biz.staff": "Staff",
     "biz.staffSub": "Team members and monthly salaries",
@@ -1240,6 +1253,19 @@ const dict: Record<Lang, Record<string, string>> = {
     "sav.history": "ប្រវត្តិ",
     "sav.noHistory": "មិនមានប្រវត្តិនៅឡើយទេ",
     "sav.errAmount": "សូមបញ្ចូលចំនួនត្រឹមត្រូវ",
+
+    // Currency toggle + quick money box
+    "cur.toggle": "រូបិយប័ណ្ណ",
+    "cur.rate": "អត្រាប្តូរ",
+    "quick.moneyTitle": "ប្រាក់ចូល/ចេញរហ័ស",
+    "quick.in": "ប្រាក់ចូល",
+    "quick.out": "ប្រាក់ចេញ",
+    "quick.income": "ចំណូល",
+    "quick.expense": "ចំណាយ",
+    "quick.save": "រក្សាទុក",
+    "quick.done": "បានរក្សាទុក",
+    "quick.savedToast": "បានរក្សាទុកទៅប្រតិបត្តិការ",
+    "quick.notePlaceholder": "កំណត់សម្គាល់ (ស្រេចចិត្ត) — ឧ. អាហារ តាក់ស៊ី ប្រាក់ខែ…",
 
     // Staff / quotes (ភាសាខ្មែរ)
     "biz.staff": "បុគ្គលិក",

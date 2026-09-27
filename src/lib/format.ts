@@ -10,7 +10,7 @@ import type { Currency } from "./types";
  */
 
 export const DEFAULT_USD_TO_KHR = 4100;
-const KHR_SYMBOL = "\u17DB"; // ៛
+export const KHR_SYMBOL = "\u17DB"; // ៛
 
 let displayCurrency: Currency = "USD";
 let displayRate = DEFAULT_USD_TO_KHR;

@@ -1,4 +1,5 @@
 import { FadeIn, StatCard } from "@/components/systems/Shared";
+import { MoneyInput } from "@/components/systems/MoneyInput";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -323,32 +324,14 @@ export default function ExpenseSavings() {
               />
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="sav-target">{t("sav.target")}</Label>
-                <Input
-                  id="sav-target"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.target}
-                  onChange={(e) => setForm({ ...form, target: e.target.value })}
-                  className="h-10 rounded-xl"
-                  inputMode="decimal"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="sav-saved">{t("sav.alreadySaved")}</Label>
-                <Input
-                  id="sav-saved"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.saved}
-                  onChange={(e) => setForm({ ...form, saved: e.target.value })}
-                  className="h-10 rounded-xl"
-                  inputMode="decimal"
-                />
-              </div>
+              <MoneyInput
+                valueUsd={form.target === "" ? null : Number(form.target)}
+                onChangeUsd={(v) => setForm({ ...form, target: v === null ? "" : String(v) })}
+              />
+              <MoneyInput
+                valueUsd={form.saved === "" ? null : Number(form.saved)}
+                onChangeUsd={(v) => setForm({ ...form, saved: v === null ? "" : String(v) })}
+              />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="sav-date">{t("sav.targetDate")}</Label>
@@ -431,20 +414,11 @@ export default function ExpenseSavings() {
                   {moveFor.target > 0 ? ` · ${t("sav.remaining")}: ${money(Math.max(0, moveFor.target - moveFor.saved))}` : ""}
                 </p>
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="sav-amount">{t("sav.amount")}</Label>
-                <Input
-                  id="sav-amount"
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  value={moveAmount}
-                  onChange={(e) => setMoveAmount(e.target.value)}
-                  className="h-10 rounded-xl"
-                  inputMode="decimal"
-                  autoFocus
-                />
-              </div>
+              <MoneyInput
+                valueUsd={moveAmount === "" ? null : Number(moveAmount)}
+                onChangeUsd={(v) => setMoveAmount(v === null ? "" : String(v))}
+                autoFocus
+              />
               <Button onClick={applyMove} disabled={!(Number(moveAmount) > 0)} className="w-full rounded-xl">
                 {t("common.save")}
               </Button>

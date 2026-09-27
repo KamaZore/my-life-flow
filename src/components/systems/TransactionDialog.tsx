@@ -1,4 +1,5 @@
 import { ImagePicker } from "@/components/systems/ImagePicker";
+import { MoneyInput } from "@/components/systems/MoneyInput";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -120,22 +121,12 @@ export function TransactionDialog({
             ))}
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="tx-amount">{t("exp.amount")}</Label>
-            <Input
-              id="tx-amount"
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="0.01"
-              required
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="0.00"
-              className="h-11 rounded-xl text-lg font-semibold"
-              autoFocus
-            />
-          </div>
+          <MoneyInput
+            id="tx-amount"
+            valueUsd={amount === "" ? null : Number(amount)}
+            onChangeUsd={(v) => setAmount(v === null ? "" : String(v))}
+            autoFocus
+          />
 
           <div className="grid grid-cols-1 gap-3 max-[380px]:grid-cols-1 sm:grid-cols-2">
             <div className="space-y-1.5">

@@ -1,5 +1,6 @@
 import { DateFilterBar } from "@/components/systems/DateFilterBar";
 import { FadeIn } from "@/components/systems/Shared";
+import { MoneyInput } from "@/components/systems/MoneyInput";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -280,20 +281,11 @@ export default function ExpenseCategories() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="b-amt">{t("biz.budgetAmount")}</Label>
-              <Input
-                id="b-amt"
-                type="number"
-                min="0"
-                step="0.01"
-                value={budgetVal}
-                onChange={(e) => setBudgetVal(e.target.value)}
-                className="h-10 rounded-xl"
-                autoFocus
-                onKeyDown={(e) => e.key === "Enter" && saveBudget()}
-              />
-            </div>
+            <MoneyInput
+              valueUsd={budgetVal === "" ? null : Number(budgetVal)}
+              onChangeUsd={(v) => setBudgetVal(v === null ? "" : String(v))}
+              autoFocus
+            />
             <p className="text-xs text-muted-foreground">{t("biz.budgetZeroClears")}</p>
           </div>
           <DialogFooter className="gap-2">

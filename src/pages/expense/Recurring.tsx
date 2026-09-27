@@ -1,4 +1,5 @@
 import { FadeIn, StatCard } from "@/components/systems/Shared";
+import { MoneyInput } from "@/components/systems/MoneyInput";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -249,18 +250,10 @@ export default function ExpenseRecurring() {
               ))}
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="rec-amount">{t("exp.amount")}</Label>
-                <Input
-                  id="rec-amount"
-                  type="number"
-                  step="0.01"
-                  value={form.amount}
-                  onChange={(e) => setForm({ ...form, amount: e.target.value })}
-                  className="h-10 rounded-xl"
-                  inputMode="decimal"
-                />
-              </div>
+              <MoneyInput
+                valueUsd={form.amount === "" ? null : Number(form.amount)}
+                onChangeUsd={(v) => setForm({ ...form, amount: v === null ? "" : String(v) })}
+              />
               <div className="space-y-1.5">
                 <Label htmlFor="rec-day">{t("exp.dayOfMonth")}</Label>
                 <Input

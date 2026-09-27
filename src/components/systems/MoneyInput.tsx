@@ -3,7 +3,7 @@ import { useSettings } from "@/lib/store";
 import { DEFAULT_USD_TO_KHR, KHR_SYMBOL } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
 import { Minus, Plus } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 /**
  * Amount input that accepts EITHER USD or Cambodian riel.
@@ -43,11 +43,19 @@ export function MoneyInput({
   const [cur, setCur] = useState<"USD" | "KHR">("USD");
   /** Raw text in the ACTIVE currency (kept as text so typing feels normal). */
   const [text, setText] = useState("");
+  /** The USD value we last pushed up ourselves — lets the sync effect below
+   * ignore our own echoes (which would otherwise rewrite mid-typing text,
+   * e.g. turning 10000៛ into 10004៛ or 2៛ into 0 while the user types). */
+  const lastEmitted = useRef<number | null>(null);
 
   // Keep the visible text in sync when the same USD value changes from
   // outside (edit dialogs, clearing the form). Number inputs re-render as
   // plain strings; trailing "." during typing is preserved.
   useEffect(() => {
+    // Our own echo: the parent re-rendered with exactly what we emitted.
+    // Leave the user's text alone.
+    if (valueUsd !== null && valueUsd === lastEmitted.current) return;
+
     const asText = valueUsd === null || Number.isNaN(valueUsd) ? "" : String(valueUsd);
     if (cur === "USD") {
       setText((prev) => {
@@ -79,12 +87,15 @@ export function MoneyInput({
   function emit(next: string, currency: "USD" | "KHR") {
     setText(next);
     if (!next) {
+      lastEmitted.current = null;
       onChangeUsd(null);
       return;
     }
     const n = Number(next);
     if (!Number.isFinite(n) || n < 0) return;
-    onChangeUsd(currency === "USD" ? Math.round(n * 100) / 100 : Math.round((n / rate) * 100) / 100);
+    const usd = currency === "USD" ? Math.round(n * 100) / 100 : Math.round((n / rate) * 100) / 100;
+    lastEmitted.current = usd;
+    onChangeUsd(usd);
   }
 
   function switchTo(next: "USD" | "KHR") {
@@ -96,6 +107,9 @@ export function MoneyInput({
         next === "KHR" ? String(Math.round(usdFromText * rate)) : String(Math.round(usdFromText * 100) / 100);
       setText(converted);
     }
+    // The USD value itself didn't change — mark it as our own echo so the
+    // sync effect doesn't re-convert the text we just wrote.
+    lastEmitted.current = usdFromText;
     setCur(next);
   }
 

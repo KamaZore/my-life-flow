@@ -18,10 +18,19 @@ function isStandalone() {
 }
 
 function isIos() {
-  return /iphone|ipad|ipod/i.test(navigator.userAgent);
+  if (/iphone|ipad|ipod/i.test(navigator.userAgent)) return true;
+  // iPadOS 13+ reports itself as macOS Safari.
+  return /macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1;
 }
 
-/** Lightweight install prompt shown once on phones and desktop browsers. */
+/**
+ * Lightweight install prompt shown once on phones and desktop browsers.
+ *
+ * Android/desktop Chromium fire `beforeinstallprompt`, so Install uses the
+ * native prompt. iOS Safari never fires it — there installation is manual
+ * (Share → Add to Home Screen), so we show step-by-step guidance instead of
+ * a button that can't do anything.
+ */
 export function InstallPrompt() {
   const { t } = useI18n();
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
@@ -33,7 +42,6 @@ export function InstallPrompt() {
     }
   });
   const [installed, setInstalled] = useState(isStandalone);
-  const [installUnavailable, setInstallUnavailable] = useState(false);
 
   useEffect(() => {
     if (isStandalone()) {
@@ -77,16 +85,23 @@ export function InstallPrompt() {
   const ios = isIos();
   const mobile = /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
   const Icon = ios || mobile ? Smartphone : Monitor;
+  // No native prompt event (iOS, or a browser that never fired one): guide
+  // instead of offering an Install button that would do nothing.
+  const guideOnly = !installEvent;
 
   return (
     <aside className="fixed inset-x-3 bottom-3 z-[100] mx-auto flex max-w-lg items-center gap-3 border border-primary/30 bg-card p-3 shadow-2xl ring-1 ring-primary/10 sm:bottom-5 sm:p-4">
-      <span className="flex size-10 shrink-0 items-center justify-center bg-primary/10 text-primary">
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
         <Icon className="size-5" />
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-bold">{t("install.title")}</p>
         <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-          {installUnavailable ? t("install.unavailable") : t("install.description")}
+          {guideOnly
+            ? ios
+              ? t("install.iosShare")
+              : t("install.unavailable")
+            : t("install.description")}
         </p>
       </div>
       <div className="flex shrink-0 items-center gap-1">
@@ -99,7 +114,6 @@ export function InstallPrompt() {
               const choice = await installEvent.userChoice;
               if (choice.outcome === "accepted") setInstalled(true);
               setInstallEvent(null);
-              setInstallUnavailable(false);
               dismiss();
             }}
           >
@@ -107,13 +121,8 @@ export function InstallPrompt() {
             {t("install.action")}
           </Button>
         ) : (
-          <Button
-            size="sm"
-            className="gap-1.5"
-            onClick={() => setInstallUnavailable(true)}
-          >
-            <Download className="size-3.5" />
-            {t("install.action")}
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={dismiss}>
+            {t("install.later")}
           </Button>
         )}
         <Button variant="ghost" size="icon" className="size-8" onClick={dismiss} aria-label={t("install.later")}>

@@ -1,5 +1,4 @@
 import { DateFilterBar } from "@/components/systems/DateFilterBar";
-import { QuickMoneyBox } from "@/components/systems/QuickMoneyBox";
 import { StatCard } from "@/components/systems/Shared";
 import { TransactionDialog } from "@/components/systems/TransactionDialog";
 import { Button } from "@/components/ui/button";
@@ -82,9 +81,6 @@ export default function ExpenseDashboard() {
       </div>
 
       <DateFilterBar value={filter} onChange={setFilter} />
-
-      {/* Quick money in/out capture */}
-      <QuickMoneyBox />
 
       {/* Totals */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

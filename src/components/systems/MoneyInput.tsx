@@ -15,6 +15,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
  *
  * Rounding: riel has no subunits, so riel input is divided by the rate and
  * rounded to 2 decimals (cents). USD→KHR previews round to whole riel.
+ *
+ * Typing contract: the text inside the field is the source of truth while
+ * the user types. External value changes (edit dialogs opening, form
+ * resets, quick chips) only reformat the text when the value genuinely
+ * differs from what the current text represents — and never while the
+ * user is mid-typing (focused + recently changed). This is what keeps
+ * "100" riel from collapsing into "00".
  */
 export function MoneyInput({
   id,
@@ -43,46 +50,57 @@ export function MoneyInput({
   const [cur, setCur] = useState<"USD" | "KHR">("USD");
   /** Raw text in the ACTIVE currency (kept as text so typing feels normal). */
   const [text, setText] = useState("");
-  /** The USD value we last pushed up ourselves — lets the sync effect below
-   * ignore our own echoes (which would otherwise rewrite mid-typing text,
-   * e.g. turning 10000៛ into 10004៛ or 2៛ into 0 while the user types). */
+  /** Timestamp of the last user keystroke — suppresses external syncs for a moment. */
+  const lastTypedAt = useRef(0);
+  /** The USD value we last pushed up ourselves (echo guard). */
   const lastEmitted = useRef<number | null>(null);
 
-  // Keep the visible text in sync when the same USD value changes from
-  // outside (edit dialogs, clearing the form). Number inputs re-render as
-  // plain strings; trailing "." during typing is preserved.
-  useEffect(() => {
-    // Our own echo: the parent re-rendered with exactly what we emitted.
-    // Leave the user's text alone.
-    if (valueUsd !== null && valueUsd === lastEmitted.current) return;
-
-    const asText = valueUsd === null || Number.isNaN(valueUsd) ? "" : String(valueUsd);
-    if (cur === "USD") {
-      setText((prev) => {
-        if (prev === asText) return prev;
-        const asNum = Number(asText);
-        if (Number(prev) === asNum && prev !== "" && asText !== "") return prev;
-        return asText;
-      });
-    } else {
-      const khr = valueUsd === null ? "" : String(Math.round(valueUsd * rate));
-      setText((prev) => {
-        if (prev === khr) return prev;
-        const asNum = Number(khr);
-        if (Number(prev) === asNum && prev !== "" && khr !== "") return prev;
-        return khr;
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [valueUsd, cur, rate]);
-
-  /** USD value the current text represents (null when invalid/empty). */
+  /** What the CURRENT text represents in USD (null when empty/invalid). */
   const usdFromText = useMemo(() => {
     if (!text) return null;
     const n = Number(text);
     if (!Number.isFinite(n) || n < 0) return null;
     return cur === "USD" ? Math.round(n * 100) / 100 : Math.round((n / rate) * 100) / 100;
   }, [text, cur, rate]);
+
+  // Keep the visible text in sync ONLY with genuine external changes.
+  useEffect(() => {
+    // 1. User typed recently (< 700ms): never steal the field mid-typing.
+    if (Date.now() - lastTypedAt.current < 700) return;
+
+    // 2. Our own echo: the parent re-rendered with exactly what we emitted.
+    if (valueUsd === null && lastEmitted.current === null) return;
+    if (
+      valueUsd !== null &&
+      lastEmitted.current !== null &&
+      Math.abs(valueUsd - lastEmitted.current) < 0.005
+    ) {
+      return;
+    }
+
+    // 3. The incoming value matches what the field already shows (within a
+    //    riel/cent of tolerance) — e.g. 100៛ → $0.02 stored → $0.02 back.
+    //    Re-rendering the same value would only disturb the text.
+    if (valueUsd === null) {
+      // External clear (dialog reset) — only clear if not just typed.
+      setText("");
+      lastEmitted.current = null;
+      return;
+    }
+    const textRep = usdFromText;
+    if (textRep !== null && Math.abs(textRep - valueUsd) < Math.max(0.005, 1 / rate)) {
+      return;
+    }
+
+    // 4. Genuine external change: reformat the text in the active currency.
+    if (cur === "USD") {
+      setText(String(valueUsd));
+    } else {
+      setText(String(Math.round(valueUsd * rate)));
+    }
+    lastEmitted.current = valueUsd;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [valueUsd, cur, rate]);
 
   function emit(next: string, currency: "USD" | "KHR") {
     setText(next);
@@ -170,7 +188,10 @@ export function MoneyInput({
           step={isKhr ? "1" : "0.01"}
           required
           value={text}
-          onChange={(e) => emit(e.target.value, cur)}
+          onChange={(e) => {
+            lastTypedAt.current = Date.now();
+            emit(e.target.value, cur);
+          }}
           placeholder={placeholder ?? (isKhr ? "0" : "0.00")}
           className="h-11 rounded-xl pl-8 text-lg font-semibold"
           autoFocus={autoFocus}
@@ -182,6 +203,7 @@ export function MoneyInput({
               key={n}
               type="button"
               onClick={() => {
+                lastTypedAt.current = Date.now();
                 const base = Number(text) || 0;
                 emit(String(Math.round((base + n) * 100) / 100), cur);
               }}

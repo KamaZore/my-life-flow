@@ -31,11 +31,16 @@ import {
   Monitor,
   UserRound,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 
-export default function Settings() {
+/**
+ * Shared settings page used by Life, Expense, Admin — and Business, which
+ * injects its shop-specific card via `extra` so every system's settings
+ * page keeps the same structure and style.
+ */
+export default function Settings({ extra }: { extra?: ReactNode } = {}) {
   const { t, lang, setLang } = useI18n();
   const settings = useSettings();
   const { mode, setMode } = useTheme();
@@ -115,6 +120,8 @@ export default function Settings() {
           </Button>
         </div>
       </section>
+
+      {extra}
 
       {/* Language */}
       <section className="card-soft rounded-2xl border border-border/70 bg-card p-4">

@@ -11,9 +11,18 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { money, moneyShort } from "@/lib/format";
+import { ImagePicker } from "@/components/systems/ImagePicker";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useI18n } from "@/lib/i18n";
 import {
   addSalonProduct,
+  useSalon,
   adjustSalonStock,
   deleteSalonProduct,
   updateSalonProduct,
@@ -29,12 +38,15 @@ const emptyForm = {
   cost: "",
   stock: "0",
   lowStockThreshold: "3",
+  categoryId: "",
   sku: "",
+  image: "",
 };
 
 export default function SalonProducts() {
   const { t } = useI18n();
   const products = useSalonProducts();
+  const salon = useSalon();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -58,7 +70,9 @@ export default function SalonProducts() {
       cost: p.cost ? String(p.cost) : "",
       stock: String(p.stock),
       lowStockThreshold: String(p.lowStockThreshold),
+      categoryId: p.categoryId ?? "",
       sku: p.sku ?? "",
+      image: p.image ?? "",
     });
     setOpen(true);
   }
@@ -73,7 +87,9 @@ export default function SalonProducts() {
       cost: form.cost ? Math.round(Number(form.cost) * 100) / 100 : undefined,
       stock: Math.max(0, Math.round(Number(form.stock) || 0)),
       lowStockThreshold: Math.max(0, Math.round(Number(form.lowStockThreshold) || 0)),
+      categoryId: form.categoryId || undefined,
       sku: form.sku.trim() || undefined,
+      image: form.image || undefined,
       active: true,
     };
     if (editing) updateSalonProduct(editing, payload);
@@ -111,9 +127,13 @@ export default function SalonProducts() {
           <FadeIn key={p.id} delay={i * 0.03}>
             <div className="card-soft flex h-full flex-col rounded-2xl border border-border/60 bg-card p-4">
               <div className="flex items-start gap-3">
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-sky-500/12 text-sky-600 dark:text-sky-400">
-                  <Package className="size-5" />
-                </span>
+                {p.image ? (
+                  <img src={p.image} alt="" loading="lazy" className="size-10 shrink-0 rounded-2xl object-cover ring-1 ring-border/60" />
+                ) : (
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-sky-500/12 text-sky-600 dark:text-sky-400">
+                    <Package className="size-5" />
+                  </span>
+                )}
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">{p.name}</p>
                   <p className="text-xs text-muted-foreground">
@@ -178,6 +198,21 @@ export default function SalonProducts() {
               valueUsd={form.price === "" ? null : Number(form.price)}
               onChangeUsd={(v) => setForm({ ...form, price: v === null ? "" : String(v) })}
             />
+            <div className="grid grid-cols-[auto_1fr] gap-3">
+              <ImagePicker value={form.image} onChange={(v) => setForm({ ...form, image: v ?? "" })} size="sm" />
+              <div className="space-y-1.5">
+                <Label>{t("salon.category")}</Label>
+                <Select value={form.categoryId || "none"} onValueChange={(v) => setForm({ ...form, categoryId: v === "none" ? "" : v })}>
+                  <SelectTrigger className="h-10 rounded-xl"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{t("salon.noCategory")}</SelectItem>
+                    {salon.categories.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1.5">
                 <Label htmlFor="sp-stock">{t("salon.stock")}</Label>

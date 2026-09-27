@@ -50,14 +50,27 @@ export default function SalonPOS() {
   const [amountPaid, setAmountPaid] = useState("");
   const [receipt, setReceipt] = useState<{ number: number; total: number; change: number } | null>(null);
 
+  const [activeCat, setActiveCat] = useState<string>("all");
   const q = search.trim().toLowerCase();
   const services = useMemo(
-    () => salon.services.filter((s) => s.active !== false && (!q || s.name.toLowerCase().includes(q))),
-    [salon.services, q],
+    () =>
+      salon.services.filter(
+        (s) =>
+          s.active !== false &&
+          (activeCat === "all" || s.categoryId === activeCat) &&
+          (!q || s.name.toLowerCase().includes(q)),
+      ),
+    [salon.services, q, activeCat],
   );
   const products = useMemo(
-    () => salon.products.filter((p) => p.active !== false && (!q || p.name.toLowerCase().includes(q))),
-    [salon.products, q],
+    () =>
+      salon.products.filter(
+        (p) =>
+          p.active !== false &&
+          (activeCat === "all" || p.categoryId === activeCat) &&
+          (!q || p.name.toLowerCase().includes(q)),
+      ),
+    [salon.products, q, activeCat],
   );
 
   const subtotal = Math.round(cart.reduce((s, l) => s + l.price * l.qty, 0) * 100) / 100;
@@ -167,6 +180,37 @@ export default function SalonPOS() {
             autoFocus
           />
 
+          {salon.categories.length > 0 && (
+            <div className="-mx-2 overflow-x-auto px-2 pb-1 md:mx-0 md:px-0">
+              <div className="flex w-max gap-2 md:flex-wrap">
+                <button
+                  onClick={() => setActiveCat("all")}
+                  className={`h-8 shrink-0 rounded-full border px-3 text-xs font-semibold transition-colors ${
+                    activeCat === "all"
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border/70 text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  {t("salon.allCategories")}
+                </button>
+                {salon.categories.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setActiveCat(c.id)}
+                    className={`flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-colors ${
+                      activeCat === c.id
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border/70 text-muted-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <span className="size-2 rounded-full" style={{ backgroundColor: c.color ?? "#ec4899" }} />
+                    {c.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <section className="space-y-2">
             <h2 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground">
               <Sparkles className="size-3.5" />
@@ -180,12 +224,16 @@ export default function SalonPOS() {
                   className="card-soft flex flex-col items-start gap-1.5 rounded-2xl border border-border/60 bg-card p-3 text-left transition-all hover:border-primary/40 hover:shadow-md"
                   style={s.color ? { borderColor: `${s.color}30` } : undefined}
                 >
-                  <span
-                    className="flex size-7 items-center justify-center rounded-xl"
-                    style={{ backgroundColor: `${s.color ?? "#ec4899"}1f`, color: s.color ?? "#ec4899" }}
-                  >
-                    <Sparkles className="size-4" />
-                  </span>
+                  {s.image ? (
+                    <img src={s.image} alt="" loading="lazy" className="h-14 w-full rounded-xl object-cover ring-1 ring-border/60" />
+                  ) : (
+                    <span
+                      className="flex size-7 items-center justify-center rounded-xl"
+                      style={{ backgroundColor: `${s.color ?? "#ec4899"}1f`, color: s.color ?? "#ec4899" }}
+                    >
+                      <Sparkles className="size-4" />
+                    </span>
+                  )}
                   <span className="line-clamp-2 min-h-8 text-sm font-semibold leading-snug">{s.name}</span>
                   <span className="text-sm font-bold text-primary">{money(s.price)}</span>
                 </button>
@@ -206,6 +254,9 @@ export default function SalonPOS() {
                   disabled={p.stock <= 0}
                   className="card-soft flex flex-col items-start gap-1.5 rounded-2xl border border-border/60 bg-card p-3 text-left transition-all hover:border-primary/40 hover:shadow-md disabled:opacity-40"
                 >
+                  {p.image && (
+                    <img src={p.image} alt="" loading="lazy" className="h-14 w-full rounded-xl object-cover ring-1 ring-border/60" />
+                  )}
                   <span className="flex w-full items-start justify-between gap-1">
                     <span className="line-clamp-2 min-h-8 text-sm font-semibold leading-snug">{p.name}</span>
                     {p.stock <= p.lowStockThreshold && (

@@ -44,6 +44,8 @@ const ExpenseSavings = lazy(() => import("./pages/expense/Savings.tsx"));
 const SalonDashboard = lazy(() => import("./pages/salon/Dashboard.tsx"));
 const SalonPOS = lazy(() => import("./pages/salon/POS.tsx"));
 const SalonSales = lazy(() => import("./pages/salon/Sales.tsx"));
+const SalonAppointments = lazy(() => import("./pages/salon/Appointments.tsx"));
+const SalonCategories = lazy(() => import("./pages/salon/Categories.tsx"));
 const SalonCustomers = lazy(() => import("./pages/salon/Customers.tsx"));
 const SalonServices = lazy(() => import("./pages/salon/Services.tsx"));
 const SalonProducts = lazy(() => import("./pages/salon/Products.tsx"));
@@ -322,6 +324,8 @@ function AppRoutes() {
       <Route path="/salon/dashboard" element={<RequireSystem system="salon"><AppLayout><SalonDashboard /></AppLayout></RequireSystem>} />
       <Route path="/salon/pos" element={<RequireSystem system="salon"><AppLayout><SalonPOS /></AppLayout></RequireSystem>} />
       <Route path="/salon/sales" element={<RequireSystem system="salon"><AppLayout><SalonSales /></AppLayout></RequireSystem>} />
+      <Route path="/salon/appointments" element={<RequireSystem system="salon"><AppLayout><SalonAppointments /></AppLayout></RequireSystem>} />
+      <Route path="/salon/categories" element={<RequireSystem system="salon"><AppLayout><SalonCategories /></AppLayout></RequireSystem>} />
       <Route path="/salon/customers" element={<RequireSystem system="salon"><AppLayout><SalonCustomers /></AppLayout></RequireSystem>} />
       <Route path="/salon/services" element={<RequireSystem system="salon"><AppLayout><SalonServices /></AppLayout></RequireSystem>} />
       <Route path="/salon/products" element={<RequireSystem system="salon"><AppLayout><SalonProducts /></AppLayout></RequireSystem>} />

@@ -39,6 +39,8 @@ import type {
   Recurrence,
   RecurringTx,
   SavingGoal,
+  SalonAppointment,
+  SalonCategory,
   SalonCustomer,
   SalonData,
   SalonProduct,
@@ -809,6 +811,11 @@ function seedData(): AppData {
     },
     salon: {
       shopName: "Glow Salon",
+      categories: [
+        { id: "slc-hair", name: "Hair", color: "#ec4899", createdAt: t - 40 * 864e5 },
+        { id: "slc-nail", name: "Nails", color: "#8b5cf6", createdAt: t - 40 * 864e5 },
+        { id: "slc-retail", name: "Retail", color: "#0ea5e9", createdAt: t - 40 * 864e5 },
+      ],
       services: [
         { id: "sv-haircut", name: "Haircut", price: 8, duration: 30, color: "#ec4899", createdAt: t - 40 * 864e5, updatedAt: t },
         { id: "sv-color", name: "Hair coloring", price: 25, duration: 90, color: "#8b5cf6", createdAt: t - 40 * 864e5, updatedAt: t },
@@ -816,14 +823,19 @@ function seedData(): AppData {
         { id: "sv-facial", name: "Facial", price: 15, duration: 60, color: "#10b981", createdAt: t - 40 * 864e5, updatedAt: t },
       ],
       products: [
-        { id: "sp-shampoo", name: "Shampoo 250ml", price: 6, cost: 3.5, stock: 12, lowStockThreshold: 4, sku: "SH-250", createdAt: t - 40 * 864e5, updatedAt: t },
-        { id: "sp-serum", name: "Hair serum", price: 9, cost: 5, stock: 3, lowStockThreshold: 5, sku: "SR-001", createdAt: t - 40 * 864e5, updatedAt: t },
-        { id: "sp-cream", name: "Face cream", price: 11, cost: 6.5, stock: 8, lowStockThreshold: 3, sku: "FC-100", createdAt: t - 40 * 864e5, updatedAt: t },
+        { id: "sp-shampoo", name: "Shampoo 250ml", price: 6, cost: 3.5, stock: 12, lowStockThreshold: 4, categoryId: "slc-retail", sku: "SH-250", createdAt: t - 40 * 864e5, updatedAt: t },
+        { id: "sp-serum", name: "Hair serum", price: 9, cost: 5, stock: 3, lowStockThreshold: 5, categoryId: "slc-retail", sku: "SR-001", createdAt: t - 40 * 864e5, updatedAt: t },
+        { id: "sp-cream", name: "Face cream", price: 11, cost: 6.5, stock: 8, lowStockThreshold: 3, categoryId: "slc-retail", sku: "FC-100", createdAt: t - 40 * 864e5, updatedAt: t },
       ],
       customers: [
         { id: "sc-sokha", name: "Sokha", phone: "011 234 567", visits: 6, spent: 74, lastVisit: addDaysKey(today, -6), createdAt: t - 90 * 864e5, updatedAt: t },
         { id: "sc-dara", name: "Dara", phone: "012 345 678", visits: 3, spent: 51, lastVisit: addDaysKey(today, -15), createdAt: t - 60 * 864e5, updatedAt: t },
         { id: "sc-malis", name: "Malis", phone: "096 111 222", visits: 9, spent: 168, lastVisit: addDaysKey(today, -2), createdAt: t - 120 * 864e5, updatedAt: t },
+      ],
+      appointments: [
+        { id: "sa-1", customerId: "sc-malis", serviceId: "sv-color", staffId: "ss-ratha", date: today, time: "09:00", status: "booked", price: 25, createdAt: t - 3 * 864e5, updatedAt: t },
+        { id: "sa-2", customerId: "sc-sokha", serviceId: "sv-haircut", staffId: "ss-davy", date: today, time: "11:00", status: "booked", price: 8, createdAt: t - 2 * 864e5, updatedAt: t },
+        { id: "sa-3", customerName: "Bopha", phone: "010 555 666", serviceId: "sv-wash", date: addDaysKey(today, 1), time: "10:00", status: "booked", price: 5, createdAt: t - 864e5, updatedAt: t },
       ],
       staff: [
         { id: "ss-davy", name: "Davy", role: "Senior stylist", phone: "011 000 111", commission: 40, createdAt: t - 90 * 864e5, updatedAt: t },
@@ -923,10 +935,12 @@ export function normalizeData(parsed: Partial<AppData> | null | undefined): AppD
     salon: {
       ...fresh.salon,
       ...(parsed.salon ?? {}),
+      categories: Array.isArray(parsed.salon?.categories) ? parsed.salon.categories : [],
       services: Array.isArray(parsed.salon?.services) ? parsed.salon.services : [],
       products: Array.isArray(parsed.salon?.products) ? parsed.salon.products : [],
       customers: Array.isArray(parsed.salon?.customers) ? parsed.salon.customers : [],
       staff: Array.isArray(parsed.salon?.staff) ? parsed.salon.staff : [],
+      appointments: Array.isArray(parsed.salon?.appointments) ? parsed.salon.appointments : [],
       sales: Array.isArray(parsed.salon?.sales) ? parsed.salon.sales : [],
       saleCounter:
         typeof parsed.salon?.saleCounter === "number" ? parsed.salon.saleCounter : 0,
@@ -983,10 +997,12 @@ function emptyData(): AppData {
     },
     salon: {
       shopName: "",
+      categories: [],
       services: [],
       products: [],
       customers: [],
       staff: [],
+      appointments: [],
       sales: [],
       saleCounter: 0,
     },
@@ -1912,10 +1928,12 @@ export function clearAllData() {
     business: { ...data.business, products: [], customers: [], suppliers: [], orders: [], heldOrders: [], purchases: [], expenses: [], staff: [], quotes: [], orderCounter: 0, quoteCounter: 0 },
     salon: {
       ...data.salon,
+      categories: [],
       services: [],
       products: [],
       customers: [],
       staff: [],
+      appointments: [],
       sales: [],
       saleCounter: 0,
     },
@@ -2599,6 +2617,70 @@ export function updateSalonService(id: string, patch: Partial<SalonService>) {
 
 export function deleteSalonService(id: string) {
   set((d) => ({ ...d, salon: { ...d.salon, services: d.salon.services.filter((x) => x.id !== id) } }));
+}
+
+/* ----- categories ----- */
+
+export function addSalonCategory(input: Omit<SalonCategory, "id" | "createdAt">): SalonCategory {
+  const cat: SalonCategory = { ...input, id: uid(), createdAt: nowTs() };
+  set((d) => ({ ...d, salon: { ...d.salon, categories: [cat, ...d.salon.categories] } }));
+  return cat;
+}
+
+export function updateSalonCategory(id: string, patch: Partial<SalonCategory>) {
+  set((d) => ({
+    ...d,
+    salon: {
+      ...d.salon,
+      categories: d.salon.categories.map((x) => (x.id === id ? { ...x, ...patch } : x)),
+    },
+  }));
+}
+
+export function deleteSalonCategory(id: string) {
+  set((d) => ({
+    ...d,
+    salon: {
+      ...d.salon,
+      categories: d.salon.categories.filter((x) => x.id !== id),
+      // Detach from services/products rather than orphaning the reference.
+      services: d.salon.services.map((x) => (x.categoryId === id ? { ...x, categoryId: undefined } : x)),
+      products: d.salon.products.map((x) => (x.categoryId === id ? { ...x, categoryId: undefined } : x)),
+    },
+  }));
+}
+
+/* ----- appointments (booking) ----- */
+
+export function useSalonAppointments(): SalonAppointment[] {
+  return useAppData().salon.appointments;
+}
+
+export function saveSalonAppointment(
+  input: Omit<SalonAppointment, "id" | "createdAt" | "updatedAt"> & { id?: string },
+): SalonAppointment {
+  const ts = nowTs();
+  const existing = input.id ? data.salon.appointments.find((x) => x.id === input.id) : undefined;
+  const appt: SalonAppointment = existing
+    ? { ...existing, ...input, id: existing.id, createdAt: existing.createdAt, updatedAt: ts }
+    : { ...input, id: uid(), createdAt: ts, updatedAt: ts };
+  set((d) => ({
+    ...d,
+    salon: {
+      ...d.salon,
+      appointments: existing
+        ? d.salon.appointments.map((x) => (x.id === appt.id ? appt : x))
+        : [appt, ...d.salon.appointments],
+    },
+  }));
+  return appt;
+}
+
+export function deleteSalonAppointment(id: string) {
+  set((d) => ({
+    ...d,
+    salon: { ...d.salon, appointments: d.salon.appointments.filter((x) => x.id !== id) },
+  }));
 }
 
 /* ----- products (retail stock) ----- */

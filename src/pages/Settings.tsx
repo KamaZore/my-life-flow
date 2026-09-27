@@ -17,6 +17,7 @@ import { useCurrency, money } from "@/lib/format";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
+import { ImagePicker } from "@/components/systems/ImagePicker";
 import {
   Banknote,
   CloudUpload,
@@ -98,7 +99,14 @@ export default function Settings({ extra }: { extra?: ReactNode } = {}) {
       {/* Profile */}
       <section className="card-soft rounded-2xl border border-border/70 bg-card p-4">
         <h2 className="pb-3 text-sm font-semibold">{t("settings.profile")}</h2>
-        <div className="flex items-end gap-2">
+        <div className="flex items-start gap-3">
+          <div className="flex flex-col items-center gap-1">
+            <ImagePicker
+              value={settings.avatar}
+              onChange={(v) => updateSettings({ avatar: v })}
+              size="md"
+            />
+          </div>
           <div className="flex-1 space-y-1.5">
             <Label htmlFor="name">{t("settings.name")}</Label>
             <Input

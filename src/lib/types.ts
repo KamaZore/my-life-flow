@@ -156,6 +156,8 @@ export type AppSettings = {
   theme: "light" | "dark" | "system";
   name: string;
   weekStartsMonday: boolean;
+  /** profile photo (compressed data URL) shown in the sidebar + settings */
+  avatar?: string;
   /** display currency — amounts are always stored in USD */
   currency?: Currency;
   /** exchange rate: 1 USD = X KHR (riel has no subunits) */
@@ -487,6 +489,14 @@ export const PAYMENT_LABELS: Record<PaymentMethod, string> = {
 /* Salon Management system                                             */
 /* ------------------------------------------------------------------ */
 
+/** Category grouping services and products (hair, nails, retail…). */
+export type SalonCategory = {
+  id: string;
+  name: string;
+  color?: string;
+  createdAt: number;
+};
+
 /** Offered service (haircut, coloring, manicure…). */
 export type SalonService = {
   id: string;
@@ -495,6 +505,8 @@ export type SalonService = {
   price: number;
   /** duration in minutes */
   duration: number;
+  categoryId?: string;
+  image?: string;
   color?: string;
   active?: boolean;
   createdAt: number;
@@ -536,9 +548,33 @@ export type SalonProduct = {
   stock: number;
   /** alert when stock falls to or below this */
   lowStockThreshold: number;
+  categoryId?: string;
   sku?: string;
   image?: string;
   active?: boolean;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type SalonAppointmentStatus = "booked" | "done" | "cancelled" | "no_show";
+
+/** Upcoming visit reservation (customer books a time; consumed at the POS). */
+export type SalonAppointment = {
+  id: string;
+  customerId?: string;
+  /** free-text name for bookings without a saved customer */
+  customerName?: string;
+  phone?: string;
+  serviceId: string;
+  staffId?: string;
+  /** ISO date (yyyy-mm-dd) */
+  date: string;
+  /** HH:mm 24h */
+  time: string;
+  status: SalonAppointmentStatus;
+  /** price captured at booking (USD) */
+  price: number;
+  note?: string;
   createdAt: number;
   updatedAt: number;
 };
@@ -576,10 +612,12 @@ export type SalonSale = {
 
 export type SalonData = {
   shopName: string;
+  categories: SalonCategory[];
   services: SalonService[];
   products: SalonProduct[];
   customers: SalonCustomer[];
   staff: SalonStaff[];
+  appointments: SalonAppointment[];
   sales: SalonSale[];
   /** last receipt number issued */
   saleCounter: number;

@@ -9,6 +9,8 @@ import {
 import { useI18n } from "@/lib/i18n";
 import { SYSTEMS, type SystemDef } from "@/systems";
 import { useAuth } from "@/hooks/use-auth";
+import { NotificationBell } from "@/components/app/NotificationBell";
+import { useAppData } from "@/lib/store";
 import {
   ICONS,
   loadModules,
@@ -129,7 +131,8 @@ function LangToggle() {
 export function AppLayout({ children }: { children?: ReactNode }) {
   const { resolved, toggle } = useTheme();
   const { t, lang } = useI18n();
-  const { can } = useAuth();
+  const { can, user } = useAuth();
+  const data = useAppData();
   const modules = useModules();
 
   useEffect(() => {
@@ -226,7 +229,27 @@ export function AppLayout({ children }: { children?: ReactNode }) {
           <LayoutGrid className="size-3.5" />
         </button>
         <SidebarNav system={system} />
-        <div className="mt-auto flex items-center gap-2 px-2 pt-4">
+        <div className="mt-auto space-y-2 px-2 pt-4">
+          {/* Signed-in identity */}
+          {user && (
+            <button
+              onClick={() => navigate("/life/settings")}
+              className="flex w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-accent"
+            >
+              {data.settings.avatar ? (
+                <img src={data.settings.avatar} alt="" className="size-8 shrink-0 rounded-full object-cover ring-1 ring-border" />
+              ) : (
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                  {(user.name || user.email).slice(0, 2).toUpperCase()}
+                </span>
+              )}
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-xs font-semibold">{user.name || user.email}</span>
+                <span className="block truncate text-[10px] text-muted-foreground">{t("settings.profile")}</span>
+              </span>
+            </button>
+          )}
+          <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="icon"
@@ -244,6 +267,7 @@ export function AppLayout({ children }: { children?: ReactNode }) {
             {resolved === "dark" ? t("theme.darkMode") : t("theme.lightMode")}
           </span>
           <LangToggle />
+          </div>
         </div>
       </aside>
 
@@ -303,6 +327,7 @@ export function AppLayout({ children }: { children?: ReactNode }) {
             </DropdownMenuContent>
           </DropdownMenu>
           <div className="flex items-center gap-1.5">
+            <NotificationBell />
             <LangToggle />
             <Button
               variant="ghost"

@@ -12,6 +12,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { money } from "@/lib/format";
+import { ImagePicker } from "@/components/systems/ImagePicker";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useI18n } from "@/lib/i18n";
 import { addSalonService, deleteSalonService, updateSalonService, useSalon } from "@/lib/store";
 import { SALON_SERVICE_COLORS, type SalonService } from "@/lib/types";
@@ -23,6 +31,8 @@ const emptyForm = {
   name: "",
   price: "",
   duration: "30",
+  categoryId: "",
+  image: "",
   color: SALON_SERVICE_COLORS[0],
   active: true,
 };
@@ -52,6 +62,8 @@ export default function SalonServices() {
       name: s.name,
       price: String(s.price),
       duration: String(s.duration),
+      categoryId: s.categoryId ?? "",
+      image: s.image ?? "",
       color: s.color ?? SALON_SERVICE_COLORS[0],
       active: s.active !== false,
     });
@@ -66,6 +78,8 @@ export default function SalonServices() {
       name,
       price: Math.round(price * 100) / 100,
       duration: Math.max(5, Math.round(Number(form.duration) || 30)),
+      categoryId: form.categoryId || undefined,
+      image: form.image || undefined,
       color: form.color,
       active: form.active,
     };
@@ -99,12 +113,16 @@ export default function SalonServices() {
           <FadeIn key={s.id} delay={i * 0.03}>
             <div className={`card-soft flex h-full flex-col rounded-2xl border border-border/60 bg-card p-4 ${s.active === false ? "opacity-60" : ""}`}>
               <div className="flex items-start gap-3">
-                <span
-                  className="flex size-10 shrink-0 items-center justify-center rounded-2xl"
-                  style={{ backgroundColor: `${s.color ?? "#ec4899"}1f`, color: s.color ?? "#ec4899" }}
-                >
-                  <Sparkles className="size-5" />
-                </span>
+                {s.image ? (
+                  <img src={s.image} alt="" loading="lazy" className="size-10 shrink-0 rounded-2xl object-cover ring-1 ring-border/60" />
+                ) : (
+                  <span
+                    className="flex size-10 shrink-0 items-center justify-center rounded-2xl"
+                    style={{ backgroundColor: `${s.color ?? "#ec4899"}1f`, color: s.color ?? "#ec4899" }}
+                  >
+                    <Sparkles className="size-5" />
+                  </span>
+                )}
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">{s.name}</p>
                   <p className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -156,6 +174,21 @@ export default function SalonServices() {
               valueUsd={form.price === "" ? null : Number(form.price)}
               onChangeUsd={(v) => setForm({ ...form, price: v === null ? "" : String(v) })}
             />
+            <div className="grid grid-cols-[auto_1fr] gap-3">
+              <ImagePicker value={form.image} onChange={(v) => setForm({ ...form, image: v ?? "" })} size="sm" />
+              <div className="space-y-1.5">
+                <Label>{t("salon.category")}</Label>
+                <Select value={form.categoryId || "none"} onValueChange={(v) => setForm({ ...form, categoryId: v === "none" ? "" : v })}>
+                  <SelectTrigger className="h-10 rounded-xl"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{t("salon.noCategory")}</SelectItem>
+                    {salon.categories.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
             <div className="space-y-1.5">
               <Label htmlFor="sv-dur">{t("salon.duration")}</Label>
               <Input

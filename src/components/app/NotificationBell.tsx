@@ -4,6 +4,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useAuth } from "@/hooks/use-auth";
 import { useI18n } from "@/lib/i18n";
 import { collectNotifications } from "@/lib/notifications";
 import { useAppData } from "@/lib/store";
@@ -30,12 +31,18 @@ function NotifIcon({ titleKey }: { titleKey: string }) {
 /** Header bell with a live count of actionable alerts across systems. */
 export function NotificationBell() {
   const { t } = useI18n();
+  const { can } = useAuth();
   const navigate = useNavigate();
   const data = useAppData();
   const [open, setOpen] = useState(false);
 
-  // Re-collect whenever any data changes.
-  const notifications = useMemo(() => collectNotifications(), [data]);
+  // Re-collect whenever any data changes. Alerts are filtered by the
+  // signed-in user's per-system permissions, so a user without access to a
+  // system never sees its alerts (or the entity names inside them).
+  const notifications = useMemo(
+    () => collectNotifications().filter((n) => can(n.system)),
+    [data, can],
+  );
   const count = notifications.length;
   const dangers = notifications.filter((n) => n.severity === "danger").length;
 

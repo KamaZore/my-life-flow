@@ -100,6 +100,19 @@ export default function SelectSystem() {
           {t("select.subtitle")}
         </p>
 
+        {allowed.length === 0 && (
+          <div className="card-soft mx-auto max-w-md rounded-3xl border border-border/70 bg-card p-6 text-center">
+            <p className="text-sm font-medium text-foreground">{t("select.noAccess")}</p>
+            <Button
+              variant="outline"
+              onClick={() => void signOut()}
+              className="mt-4 rounded-xl"
+            >
+              {t("common.signOut")}
+            </Button>
+          </div>
+        )}
+
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {allowed.map((m, i) => {
             const isLast = !m.custom && activeSystem === m.id;

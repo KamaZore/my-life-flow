@@ -33,7 +33,7 @@ const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export default function Workspace() {
   const { t } = useI18n();
-  const { user, signOut } = useAuth();
+  const { user, signOut, can } = useAuth();
   const navigate = useNavigate();
   const data = useAppData();
   useCurrency();
@@ -84,7 +84,9 @@ export default function Workspace() {
           <SidebarItem icon={LayoutGrid} label={t("workspace.overview")} active />
           <SidebarItem icon={Target} label={t("goals.title")} onClick={() => navigate("/life/goals")} />
           <SidebarItem icon={CalendarDays} label={t("workspace.calendar")} onClick={() => navigate("/life/calendar")} />
-          <SidebarItem icon={WalletCards} label={t("workspace.money")} onClick={() => navigate("/expense/dashboard")} />
+          {can("expense") && (
+            <SidebarItem icon={WalletCards} label={t("workspace.money")} onClick={() => navigate("/expense/dashboard")} />
+          )}
         </nav>
         <div className="mt-auto space-y-1 border-t border-slate-200/80 pt-4 dark:border-white/10">
           <SidebarItem icon={Settings} label={t("workspace.settings")} onClick={() => navigate("/life/settings")} />
@@ -151,7 +153,7 @@ export default function Workspace() {
             <Card className="border-slate-200/80 bg-white/90 shadow-sm dark:border-white/10 dark:bg-white/[.04]"><CardContent className="p-5"><div className="flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-[.16em] text-rose-500">{t("workspace.rhythm")}</p><h2 className="mt-1 text-lg font-extrabold">{t("workspace.smallHabits")}</h2></div><span className="flex size-10 items-center justify-center rounded-2xl bg-orange-50 text-orange-500 dark:bg-orange-500/10"><Flame className="size-5" /></span></div><div className="mt-5 flex items-end justify-between"><span className="text-3xl font-extrabold">{completedHabits}<span className="text-base text-slate-400">/{todayHabits.length}</span></span><span className="text-xs font-semibold text-slate-400">{t("workspace.habitsToday")}</span></div><Progress value={todayHabits.length ? (completedHabits / todayHabits.length) * 100 : 0} className="mt-3 h-2" /><Link to="/life/habits" className="mt-4 flex items-center justify-between text-xs font-bold text-indigo-600">{t("workspace.seeHabits")} <ChevronRight className="size-4" /></Link></CardContent></Card>
             <Card className="border-slate-200/80 bg-white/90 shadow-sm dark:border-white/10 dark:bg-white/[.04]"><CardContent className="p-5"><div className="flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-[.16em] text-emerald-500">{t("goals.title")}</p><h2 className="mt-1 text-lg font-extrabold">{t("workspace.building")}</h2></div><Target className="size-5 text-emerald-500" /></div><div className="mt-4 space-y-3">{activeGoals.slice(0, 3).map((goal) => <div key={goal.id} className="rounded-2xl bg-slate-50 p-3 dark:bg-white/5"><div className="flex items-center justify-between gap-3"><span className="text-sm font-semibold">{goal.title}</span><span className="text-xs text-slate-400">{t("workspace.active")}</span></div><Progress value={goal.status === "achieved" ? 100 : 62} className="mt-2 h-1.5" /></div>)}{activeGoals.length === 0 && <p className="text-sm text-slate-500">{t("workspace.setGoal")}</p>}</div><Link to="/life/goals" className="mt-4 flex items-center gap-1 text-xs font-bold text-indigo-600">{t("workspace.manageGoals")} <ArrowRight className="size-3.5" /></Link></CardContent></Card>
             <Card className="border-slate-200/80 bg-white/90 shadow-sm dark:border-white/10 dark:bg-white/[.04]"><CardContent className="p-5"><div className="flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-[.16em] text-amber-500">{t("workspace.comingUp")}</p><h2 className="mt-1 text-lg font-extrabold">{t("workspace.radar")}</h2></div><CalendarDays className="size-5 text-amber-500" /></div><div className="mt-4 space-y-2">{upcoming.map((event) => <div key={event.id} className="flex items-center gap-3 rounded-xl border border-slate-100 px-3 py-2.5 dark:border-white/10"><span className="flex size-8 items-center justify-center rounded-lg bg-amber-50 text-xs font-bold text-amber-600 dark:bg-amber-500/10">{event.date.slice(8)}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{event.title}</p><p className="text-[11px] text-slate-400">{event.date}</p></div></div>)}{upcoming.length === 0 && <p className="text-sm text-slate-500">{t("workspace.noUpcoming")}</p>}</div></CardContent></Card>
-            <div className="rounded-2xl bg-slate-900 p-4 text-white shadow-lg dark:bg-white/10"><div className="flex items-center gap-2 text-xs font-bold text-indigo-200"><Sparkles className="size-3.5" /> {t("workspace.gentle")}</div><p className="mt-2 text-sm leading-6 text-slate-300">{t("workspace.reminder")}</p><div className="mt-3 flex items-center justify-between text-xs"><span>{t("workspace.monthSpending")}</span><span className="font-bold">{money(monthExpenses)}</span></div></div>
+            <div className="rounded-2xl bg-slate-900 p-4 text-white shadow-lg dark:bg-white/10"><div className="flex items-center gap-2 text-xs font-bold text-indigo-200"><Sparkles className="size-3.5" /> {t("workspace.gentle")}</div><p className="mt-2 text-sm leading-6 text-slate-300">{t("workspace.reminder")}</p>{can("expense") && <div className="mt-3 flex items-center justify-between text-xs"><span>{t("workspace.monthSpending")}</span><span className="font-bold">{money(monthExpenses)}</span></div>}</div>
           </aside>
         </div>
       </main>

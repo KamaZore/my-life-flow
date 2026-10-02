@@ -77,6 +77,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const isAuthenticated = Boolean(session);
 
+  // Re-check role + permissions with the backend on load so a superadmin
+  // revoking a system takes effect immediately, without forcing the user to
+  // sign out and back in. Offline/PWA failures are ignored on purpose: the
+  // cached session keeps working so the installed app still opens.
+  useEffect(() => {
+    if (!session?.email) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const row = await getAuthRow(session.email);
+        if (cancelled || !row) return;
+        const nextRole = row.role === "superadmin" ? ("superadmin" as const) : ("user" as const);
+        const nextPerms = effectivePerms(row.role, row.permissions);
+        setSession((prev) => {
+          if (!prev) return prev;
+          if (prev.role === nextRole && JSON.stringify(prev.perms) === JSON.stringify(nextPerms)) {
+            return prev;
+          }
+          const updated = { ...prev, role: nextRole, perms: nextPerms };
+          writeSession(updated as unknown as ReturnType<typeof readSession>);
+          return updated;
+        });
+      } catch {
+        // Backend unreachable — keep the cached session as-is.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Only the account identity matters; perms arrive from the server.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.email]);
+
   const signIn = useCallback(async (email: string, password: string, turnstileToken?: string | null) => {
     setIsLoading(true);
     try {

@@ -630,6 +630,23 @@ export function salonLineTotal(l: SalonSaleLine): number {
 
 export const SALON_SERVICE_COLORS = ["#ec4899", "#8b5cf6", "#0ea5e9", "#10b981", "#f59e0b", "#14b8a6"];
 
+/**
+ * A usage event: one per sign-in and one per system page opened. Stored in
+ * the account document (newest first) and shown in the admin activity feed,
+ * so the owner can see who signed in and which modules they actually used.
+ */
+export type ActivityEntry = {
+  id: ID;
+  /** "login" = signed in, "module" = opened a system page */
+  type: "login" | "module";
+  system: SystemId;
+  /** route opened, e.g. "/salon/pos" (empty for a login event) */
+  path: string;
+  /** i18n key of the page label, so the feed stays translated */
+  labelKey: string;
+  at: number;
+};
+
 export type AppData = {
   version: number;
   seeded: boolean;
@@ -657,6 +674,8 @@ export type AppData = {
   business: BusinessData;
   /** salon management system */
   salon: SalonData;
+  /** sign-in + module view history, newest first (admin activity feed) */
+  activity: ActivityEntry[];
 };
 
 export const PRIORITIES: Priority[] = ["low", "medium", "high"];

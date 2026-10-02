@@ -79,12 +79,34 @@ const SYSTEMS: { key: keyof SystemPerms; labelKey: string }[] = [
 ];
 
 /** Counts records inside a user's data doc per system. */
-function summarize(d: unknown): { life: number; expense: number; business: number; salon: number } | null {
+/** Timestamp as a readable local string for the usage row. */
+function formatStamp(at: number) {
+  const d = new Date(at);
+  return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
+}
+
+function summarize(d: unknown): {
+  life: number;
+  expense: number;
+  business: number;
+  salon: number;
+  views: number;
+  lastSeen: number;
+  lastLogin: number;
+} | null {
   if (!d || typeof d !== "object") return null;
   const doc = d as Record<string, unknown>;
   const arr = (v: unknown) => (Array.isArray(v) ? v.length : 0);
   const biz = doc.business as Record<string, unknown> | undefined;
   const sl = doc.salon as Record<string, unknown> | undefined;
+  // Usage log: stored newest-first, so the head is the most recent event.
+  const act = Array.isArray(doc.activity)
+    ? (doc.activity as { type?: string; at?: number }[])
+    : [];
+  const stamp = (v: unknown) => (typeof v === "number" && v > 0 ? v : 0);
   return {
     life: arr(doc.tasks) + arr(doc.habits) + arr(doc.projects) + arr(doc.notes),
     expense: arr(doc.transactions) + arr(doc.accounts) + arr(doc.debts),
@@ -94,6 +116,9 @@ function summarize(d: unknown): { life: number; expense: number; business: numbe
     salon: sl
       ? arr(sl.appointments) + arr(sl.customers) + arr(sl.services) + arr(sl.staff)
       : 0,
+    views: act.filter((a) => a?.type === "module").length,
+    lastSeen: stamp(act[0]?.at),
+    lastLogin: stamp(act.find((a) => a?.type === "login")?.at),
   };
 }
 
@@ -828,21 +853,37 @@ export default function SuperAdminPanel() {
                   {t("sa.loading")}
                 </div>
               ) : dataSummary ? (
-                <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
-                  {(
-                    [
-                      ["system.life.name", dataSummary.life],
-                      ["system.expense.name", dataSummary.expense],
-                      ["system.business.name", dataSummary.business],
-                      ["system.salon.name", dataSummary.salon],
-                    ] as const
-                  ).map(([k, n]) => (
-                    <div key={k} className="rounded-2xl bg-muted/60 p-3">
-                      <p className="text-[10px] text-muted-foreground">{t(k)}</p>
-                      <p className="text-lg font-bold tabular-nums">{n}</p>
-                      <p className="text-[9px] text-muted-foreground">{t("sa.records")}</p>
-                    </div>
-                  ))}
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
+                    {(
+                      [
+                        ["system.life.name", dataSummary.life],
+                        ["system.expense.name", dataSummary.expense],
+                        ["system.business.name", dataSummary.business],
+                        ["system.salon.name", dataSummary.salon],
+                      ] as const
+                    ).map(([k, n]) => (
+                      <div key={k} className="rounded-2xl bg-muted/60 p-3">
+                        <p className="text-[10px] text-muted-foreground">{t(k)}</p>
+                        <p className="text-lg font-bold tabular-nums">{n}</p>
+                        <p className="text-[9px] text-muted-foreground">{t("sa.records")}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-muted/60 px-3 py-2 text-[11px] text-muted-foreground">
+                    <span className="font-medium">
+                      {t("sa.moduleViews")}:{" "}
+                      <span className="tabular-nums text-foreground">{dataSummary.views}</span>
+                    </span>
+                    <span>
+                      {t("sa.lastLogin")}:{" "}
+                      <span className="text-foreground">{dataSummary.lastLogin ? formatStamp(dataSummary.lastLogin) : "—"}</span>
+                    </span>
+                    <span>
+                      {t("sa.lastSeen")}:{" "}
+                      <span className="text-foreground">{dataSummary.lastSeen ? formatStamp(dataSummary.lastSeen) : "—"}</span>
+                    </span>
+                  </div>
                 </div>
               ) : (
                 <p className="rounded-xl bg-muted/60 px-3 py-4 text-center text-xs text-muted-foreground">

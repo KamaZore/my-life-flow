@@ -10,7 +10,7 @@ import { useI18n } from "@/lib/i18n";
 import { SYSTEMS, type SystemDef } from "@/systems";
 import { useAuth } from "@/hooks/use-auth";
 import { NotificationBell } from "@/components/app/NotificationBell";
-import { useAppData } from "@/lib/store";
+import { useAppData, logActivity } from "@/lib/store";
 import { useCurrency } from "@/lib/format";
 import {
   ICONS,
@@ -34,7 +34,7 @@ import {
   Sun,
   Users,
 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 
 export type QuickAddType =
@@ -132,7 +132,7 @@ function LangToggle() {
 export function AppLayout({ children }: { children?: ReactNode }) {
   const { resolved, toggle } = useTheme();
   const { t, lang } = useI18n();
-  const { can, user } = useAuth();
+  const { can, user, isAuthenticated } = useAuth();
   const data = useAppData();
   // Sync the module-level display currency (used by money()/moneyShort()) on
   // EVERY page — not just Settings/Workspace — so the user's ៛ setting
@@ -154,6 +154,28 @@ export function AppLayout({ children }: { children?: ReactNode }) {
     SYSTEMS.find(
       (s) => location.pathname === s.root || location.pathname.startsWith(s.root + "/"),
     ) ?? SYSTEMS[0];
+
+  // Usage log: one sign-in entry per session, plus an entry whenever a
+  // system page is opened. The admin activity feed reads these, so the
+  // owner can see who signed in and which modules they really used.
+  const loggedInAs = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isAuthenticated || !user?.email) return;
+    if (loggedInAs.current === user.email) return;
+    loggedInAs.current = user.email;
+    logActivity({ type: "login", system: system.id, path: "", labelKey: "" });
+    // Signing in is a one-off per session, not a route change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, user?.email]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const path = location.pathname;
+    // Only real system pages count as module usage.
+    if (path === "/" || path.startsWith("/auth") || path.startsWith("/register")) return;
+    const label = system.nav.find((n) => n.path === path)?.labelKey ?? "";
+    logActivity({ type: "module", system: system.id, path, labelKey: label });
+  }, [isAuthenticated, location.pathname, system]);
 
   const openQuickAdd = (type: QuickAddType = "task") => {
     setQuickAddType(type);

@@ -56,6 +56,7 @@ import type {
   TaskStatus,
   Transaction,
   TxType,
+  ActivityEntry,
 } from "./types";
 
 export const DATA_VERSION = 1;
@@ -713,6 +714,7 @@ function seedData(): AppData {
   return {
     version: DATA_VERSION,
     seeded: true,
+    activity: [],
     settings: {
       theme: "system",
       name: "there",
@@ -903,6 +905,7 @@ export function normalizeData(parsed: Partial<AppData> | null | undefined): AppD
     recurring: Array.isArray(parsed.recurring) ? parsed.recurring : [],
     debts: Array.isArray(parsed.debts) ? parsed.debts : [],
     savings: Array.isArray(parsed.savings) ? parsed.savings : [],
+    activity: Array.isArray(parsed.activity) ? parsed.activity : [],
     business: {
       ...fresh.business,
       ...(parsed.business ?? {}),
@@ -979,6 +982,7 @@ function emptyData(): AppData {
     recurring: [],
     debts: [],
     savings: [],
+    activity: [],
     business: {
       products: [],
       customers: [],
@@ -3033,6 +3037,40 @@ export function setBudget(category: string, amount: number) {
     else delete next[category];
     return { ...d, budgets: next };
   });
+}
+
+/* ================================================================== */
+/* Usage log: sign-ins and module views (admin activity feed)          */
+/* ================================================================== */
+
+/** Keep the feed small — it syncs with the account document. */
+const ACTIVITY_MAX = 200;
+/** Re-opening the same screen within 2 minutes is noise, not usage. */
+const ACTIVITY_DEDUP_MS = 2 * 60 * 1000;
+
+/**
+ * Record a sign-in or a module view. Newest first, de-duplicated within a
+ * short window so re-renders and back-and-forth navigation never flood the
+ * feed, and capped so the stored document stays small.
+ */
+export function logActivity(
+  entry: Omit<ActivityEntry, "id" | "at">,
+): void {
+  const at = nowTs();
+  const last = data.activity[0];
+  if (
+    last &&
+    last.type === entry.type &&
+    last.system === entry.system &&
+    last.path === entry.path &&
+    at - last.at < ACTIVITY_DEDUP_MS
+  ) {
+    return;
+  }
+  set((d) => ({
+    ...d,
+    activity: [{ ...entry, id: uid(), at }, ...d.activity].slice(0, ACTIVITY_MAX),
+  }));
 }
 
 /* ================================================================== */

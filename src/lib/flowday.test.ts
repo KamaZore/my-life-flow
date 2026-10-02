@@ -40,6 +40,7 @@ import {
   organizeInboxItem,
   projectProgress,
   reorderTasks,
+  logActivity,
   resetDemoData,
   scheduleProcess,
   toggleHabitDate,
@@ -657,5 +658,56 @@ describe("store", () => {
     expect(importData(JSON.stringify(exported))).toBe(true);
     expect(Array.isArray(getData().salon.services)).toBe(true);
     expect(Array.isArray(getData().salon.sales)).toBe(true);
+  });
+
+  test("usage log records sign-ins and module views, newest first", () => {
+    resetDemoData();
+    logActivity({ type: "login", system: "life", path: "", labelKey: "" });
+    logActivity({
+      type: "module",
+      system: "salon",
+      path: "/salon/pos",
+      labelKey: "nav.salon.pos",
+    });
+    const act = getData().activity;
+    expect(act.length).toBe(2);
+    // Newest first: the module view landed after the sign-in.
+    expect(act[0].type).toBe("module");
+    expect(act[0].path).toBe("/salon/pos");
+    expect(act[0].labelKey).toBe("nav.salon.pos");
+    expect(act[1].type).toBe("login");
+    expect(act[0].at).toBeGreaterThan(0);
+  });
+
+  test("usage log de-duplicates the same view and caps the feed", () => {
+    resetDemoData();
+    // Same screen twice in a row = one entry (navigation noise, not usage).
+    logActivity({ type: "module", system: "expense", path: "/expense/debts", labelKey: "" });
+    logActivity({ type: "module", system: "expense", path: "/expense/debts", labelKey: "" });
+    expect(getData().activity.length).toBe(1);
+    // A different screen is real usage.
+    logActivity({ type: "module", system: "expense", path: "/expense/savings", labelKey: "" });
+    expect(getData().activity.length).toBe(2);
+    // Never grows past the cap.
+    for (let i = 0; i < 260; i++) {
+      logActivity({
+        type: "module",
+        system: "business",
+        path: `/business/orders?page=${i}`,
+        labelKey: "",
+      });
+    }
+    expect(getData().activity.length).toBeLessThanOrEqual(200);
+  });
+
+  test("usage log survives an export/import round-trip", () => {
+    resetDemoData();
+    logActivity({ type: "login", system: "admin", path: "", labelKey: "" });
+    const exported = exportData();
+    resetDemoData();
+    expect(getData().activity.length).toBe(0);
+    expect(importData(exported)).toBe(true);
+    expect(getData().activity.length).toBe(1);
+    expect(getData().activity[0].type).toBe("login");
   });
 });

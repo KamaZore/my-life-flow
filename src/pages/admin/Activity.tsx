@@ -9,6 +9,8 @@ import {
   CheckCircle2,
   ClipboardList,
   Coins,
+  Eye,
+  LogIn,
   Receipt,
   ShoppingCart,
 } from "lucide-react";
@@ -26,6 +28,23 @@ type Activity = {
 };
 
 const MAX = 40;
+
+/** Colour dot per system, matching the notification bell. */
+const SYSTEM_TINT: Record<string, string> = {
+  life: "bg-emerald-500",
+  expense: "bg-sky-500",
+  business: "bg-violet-500",
+  salon: "bg-rose-500",
+  admin: "bg-amber-500",
+};
+
+function when(at: number) {
+  const d = new Date(at);
+  return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
+}
 
 export default function AdminActivity() {
   const { t, lang } = useI18n();
@@ -77,12 +96,71 @@ export default function AdminActivity() {
     return out.sort((a, b) => b.at - a.at).slice(0, MAX);
   }, [data, t]);
 
+  // Sign-ins and module views recorded by AppLayout while using the app.
+  const usage = useMemo(
+    () =>
+      data.activity.slice(0, 30).map((a) => ({
+        id: a.id,
+        kind: a.type,
+        system: a.system,
+        systemLabel: t(`system.${a.system}.name`),
+        title:
+          a.type === "login"
+            ? t("admin.act.signedIn")
+            : t("admin.act.viewed", {
+                page: a.labelKey ? t(a.labelKey) : a.path,
+              }),
+        at: a.at,
+      })),
+    [data.activity, t],
+  );
+
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">{t("admin.activity")}</h1>
         <p className="text-sm text-muted-foreground">{t("admin.activitySub")}</p>
       </div>
+
+      {/* Usage log: who signed in and which modules were opened. */}
+      <section className="space-y-2">
+        <div>
+          <h2 className="text-sm font-semibold">{t("admin.moduleViews")}</h2>
+          <p className="text-xs text-muted-foreground">{t("admin.moduleViewsSub")}</p>
+        </div>
+        <div className="space-y-1.5">
+          {usage.map((u, i) => (
+            <FadeIn key={u.id} delay={Math.min(i * 0.02, 0.2)}>
+              <div className="card-soft flex items-center gap-3 rounded-2xl border border-border/60 bg-card p-3">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted">
+                  {u.kind === "login" ? (
+                    <LogIn className="size-4 text-muted-foreground" />
+                  ) : (
+                    <Eye className="size-4 text-muted-foreground" />
+                  )}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{u.title}</p>
+                  <p className="truncate text-xs text-muted-foreground">{u.systemLabel}</p>
+                </div>
+                <span
+                  aria-hidden
+                  className={"size-2 shrink-0 rounded-full " + (SYSTEM_TINT[u.system] ?? "bg-muted-foreground")}
+                />
+                <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">
+                  {when(u.at)}
+                </span>
+              </div>
+            </FadeIn>
+          ))}
+          {usage.length === 0 && (
+            <div className="rounded-2xl border border-dashed border-border/70 p-8 text-center">
+              <Eye className="mx-auto mb-2 size-7 text-muted-foreground/50" />
+              <p className="text-sm text-muted-foreground">{t("admin.moduleViewsEmpty")}</p>
+            </div>
+          )}
+        </div>
+      </section>
 
       <div className="space-y-1.5">
         {items.map((a, i) => (

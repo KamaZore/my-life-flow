@@ -349,6 +349,7 @@ const dict: Record<Lang, Record<string, string>> = {
     "auth.signingIn": "Signing in…",
     "auth.verifyHuman": "Verifying you're human…",
     "auth.errCaptcha": "Verification failed — please try again.",
+    "auth.localNote": "Each account keeps its own private data — nothing is shared with other users.",
     "auth.creating": "Creating account…",
     "auth.emailInvalid": "Enter a valid email address",
     "auth.errInvalid": "Wrong email or password",
@@ -446,6 +447,7 @@ const dict: Record<Lang, Record<string, string>> = {
     "exp.cat.other": "Other",
 
     // Business / POS system
+    "biz.expenses": "Expenses",
     "biz.revenue": "Revenue",
     "biz.profit": "Profit",
     "biz.grossProfit": "Gross profit",
@@ -992,6 +994,7 @@ const dict: Record<Lang, Record<string, string>> = {
 
   km: {
     "auth.errCaptcha": "ការផ្ទៀងផ្ទាត់បរាជ័យ — សូមព្យាយាមម្តងទៀត។",
+    "auth.localNote": "គ្រប់គណនីមានទិន្នន័យឯកជនដាច់ដោយឡែកពីគ្នា ដោយមិនចែករំលែកជាមួយអ្នកប្រើផ្សេងទៀតទេ។",
     "landing.featureSecurityTitle": "សុវត្ថិភាពល្អបំផុត",
     "landing.featureSecurityText": "គណនីរបស់អ្នកត្រូវបានការពារដោយពាក្យសម្ងាត់ bcrypt HTTPS គ្រប់ទីកន្លែង និងការការពារ bot Cloudflare Turnstile នៅពេលចូល។",
     "landing.featureKhmerTitle": "បង្កើតសម្រាប់កម្ពុជា",
@@ -1257,6 +1260,7 @@ const dict: Record<Lang, Record<string, string>> = {
     "admin.habitsToday": "ទម្លាប់ថ្ងៃនេះ",
     "admin.clearAll": "លុបទិន្នន័យទាំងអស់",
     "admin.resetDemoNote": "ជំនួសទិន្នន័យទាំងអស់ដោយសំណុំសាកល្បង",
+    "biz.expenses": "ចំណាយ",
     "biz.revenue": "ចំណូល",
     "biz.todayProfit": "ប្រាក់ចំណេញថ្ងៃនេះ",
     "biz.receiptNum": "លេខបង្កាន់ដៃ",

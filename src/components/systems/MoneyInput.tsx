@@ -1,6 +1,6 @@
 import { Input } from "@/components/ui/input";
 import { useSettings } from "@/lib/store";
-import { DEFAULT_USD_TO_KHR, KHR_SYMBOL } from "@/lib/format";
+import { DEFAULT_USD_TO_KHR, KHR_SYMBOL, currentCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
 import { Minus, Plus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -13,8 +13,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
  * `onChange` is ALWAYS in USD (the stored currency), so no caller math
  * changes — only the typing experience does.
  *
- * Rounding: riel has no subunits, so riel input is divided by the rate and
- * rounded to 2 decimals (cents). USD→KHR previews round to whole riel.
+ * Rounding: riel input is divided by the rate and stored at FULL precision
+ * (no cent rounding), so a typed 4000៛ round-trips as exactly 4000៛ even
+ * after saving and re-opening. USD→KHR previews still round to whole riel.
  *
  * Typing contract: the text inside the field is the source of truth while
  * the user types. External value changes (edit dialogs opening, form
@@ -46,8 +47,9 @@ export function MoneyInput({
   const settings = useSettings();
   const rate = settings.usdToKhr && settings.usdToKhr >= 100 ? settings.usdToKhr : DEFAULT_USD_TO_KHR;
 
-  /** Which currency the user is typing in right now. */
-  const [cur, setCur] = useState<"USD" | "KHR">("USD");
+  /** Which currency the user is typing in right now — defaults to the
+   *  display currency, so ៛-mode users open dialogs already in riel. */
+  const [cur, setCur] = useState<"USD" | "KHR">(currentCurrency());
   /** Raw text in the ACTIVE currency (kept as text so typing feels normal). */
   const [text, setText] = useState("");
   /** Timestamp of the last user keystroke — suppresses external syncs for a moment. */
@@ -60,7 +62,7 @@ export function MoneyInput({
     if (!text) return null;
     const n = Number(text);
     if (!Number.isFinite(n) || n < 0) return null;
-    return cur === "USD" ? Math.round(n * 100) / 100 : Math.round((n / rate) * 100) / 100;
+    return cur === "USD" ? Math.round(n * 100) / 100 : n / rate;
   }, [text, cur, rate]);
 
   // Keep the visible text in sync ONLY with genuine external changes.
@@ -111,7 +113,7 @@ export function MoneyInput({
     }
     const n = Number(next);
     if (!Number.isFinite(n) || n < 0) return;
-    const usd = currency === "USD" ? Math.round(n * 100) / 100 : Math.round((n / rate) * 100) / 100;
+    const usd = currency === "USD" ? Math.round(n * 100) / 100 : n / rate;
     lastEmitted.current = usd;
     onChangeUsd(usd);
   }

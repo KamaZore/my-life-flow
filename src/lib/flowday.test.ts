@@ -493,14 +493,16 @@ describe("store", () => {
     expect(Array.isArray(getData().savings)).toBe(true);
   });
 
-  test("KHR amounts convert to USD cents at the settings rate (MoneyInput math)", () => {
-    // Same rounding rules as MoneyInput: riel ÷ rate → round to 2 decimals.
+  test("KHR amounts store full precision so riel figures round-trip exactly (MoneyInput math)", () => {
+    // MoneyInput stores riel input at full precision (khr ÷ rate, no cent
+    // rounding) so a typed 4000៛ still shows as ៛4,000 after saving.
     const rate = 4100;
-    const khrToUsd = (khr: number) => Math.round((khr / rate) * 100) / 100;
+    const khrToUsd = (khr: number) => khr / rate;
     expect(khrToUsd(4100)).toBe(1);
     expect(khrToUsd(2050)).toBe(0.5);
-    expect(khrToUsd(10000)).toBe(2.44); // 2.439… → 2.44
-    expect(khrToUsd(1)).toBe(0); // 0.0002… rounds to 0 — UI blocks saving 0
+    expect(khrToUsd(4000)).toBeCloseTo(0.9756, 4);
+    expect(Math.round(khrToUsd(4000) * rate)).toBe(4000); // round-trip exact
+    expect(khrToUsd(1)).toBeCloseTo(0.000244, 6);
     // USD→KHR preview rounds to whole riel.
     const usdToKhr = (usd: number) => Math.round(usd * rate);
     expect(usdToKhr(2.44)).toBe(10004);

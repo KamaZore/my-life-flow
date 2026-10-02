@@ -11,6 +11,7 @@ import { SYSTEMS, type SystemDef } from "@/systems";
 import { useAuth } from "@/hooks/use-auth";
 import { NotificationBell } from "@/components/app/NotificationBell";
 import { useAppData } from "@/lib/store";
+import { useCurrency } from "@/lib/format";
 import {
   ICONS,
   loadModules,
@@ -133,6 +134,10 @@ export function AppLayout({ children }: { children?: ReactNode }) {
   const { t, lang } = useI18n();
   const { can, user } = useAuth();
   const data = useAppData();
+  // Sync the module-level display currency (used by money()/moneyShort()) on
+  // EVERY page — not just Settings/Workspace — so the user's ៛ setting
+  // applies even after a cold start straight into another route.
+  useCurrency();
   const modules = useModules();
 
   useEffect(() => {

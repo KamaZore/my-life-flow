@@ -90,6 +90,19 @@ export function ensureSchema(): Promise<void> {
           updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
         )
       `;
+      // Security event log: failed / blocked sign-in attempts (see below).
+      await s`
+        CREATE TABLE IF NOT EXISTS auth_events (
+          id         TEXT PRIMARY KEY,
+          type       TEXT NOT NULL,
+          email      TEXT,
+          ip         TEXT,
+          device     TEXT,
+          at_ms      BIGINT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `;
+      await s`CREATE INDEX IF NOT EXISTS auth_events_at_ms_idx ON auth_events (at_ms DESC)`;
     })().catch((err) => {
       schemaPromise = null; // allow retry (e.g. transient offline)
       throw err;
@@ -372,4 +385,113 @@ export async function saveAppData(userId: string, data: unknown): Promise<void> 
     ON CONFLICT (user_id)
     DO UPDATE SET data = EXCLUDED.data, updated_at = now()
   `;
+}
+
+/* ------------------------------------------------------------------ */
+/* Security event log — failed / blocked sign-in attempts              */
+/* ------------------------------------------------------------------ */
+
+/** Suspicious auth activity recorded from the auth flows. */
+export const AUTH_EVENT_TYPES = [
+  "signin_fail",
+  "signin_blocked",
+  "signup_exists",
+  "sa_fail",
+  "sa_blocked",
+] as const;
+export type AuthEventType = (typeof AUTH_EVENT_TYPES)[number];
+
+export type AuthEvent = {
+  id: string;
+  type: AuthEventType;
+  email: string | null;
+  ip: string | null;
+  device: string | null;
+  at: number; // epoch ms
+};
+
+/** Newest events kept in the table — bounds storage under spam. */
+export const AUTH_EVENT_MAX = 2000;
+/** Rows older than this are dropped on read/write. */
+export const AUTH_EVENT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Telemetry text: strip control chars, cap length, empty → null. */
+function safeText(v: unknown, max: number): string | null {
+  if (typeof v !== "string") return null;
+  const clean = v.replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, max);
+  return clean || null;
+}
+
+/** Loose IPv4/IPv6 shape check — junk from a broken endpoint is dropped. */
+function safeIp(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const ip = v.trim();
+  if (ip.length < 3 || ip.length > 45) return null;
+  if (!/^[0-9a-fA-F:.]+$/.test(ip)) return null;
+  if (!/[.:]/.test(ip)) return null;
+  return ip;
+}
+
+function eventId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+}
+
+/**
+ * Record a failed or blocked sign-in attempt (account, IP, device).
+ * Best-effort by design: callers fire-and-forget so telemetry can never
+ * break or slow the auth flow; the table is capped at AUTH_EVENT_MAX rows
+ * so an attacker who clears their throttle cannot flood it.
+ */
+export async function recordAuthEvent(input: {
+  type: AuthEventType;
+  email?: string | null;
+  ip?: string | null;
+  device?: string | null;
+}): Promise<void> {
+  if (!AUTH_EVENT_TYPES.includes(input.type)) {
+    throw new ValidationError("data", "type", "Unknown auth event type");
+  }
+  const id = eventId();
+  const email = safeText(input.email, 254);
+  const ip = safeIp(input.ip);
+  const device = safeText(input.device, 200);
+  const at = Date.now();
+  await ensureSchema();
+  await getSql()`
+    INSERT INTO auth_events (id, type, email, ip, device, at_ms)
+    VALUES (${id}, ${input.type}, ${email}, ${ip}, ${device}, ${at})
+  `;
+  // Cap the table right after writing (one extra statement — events are rare).
+  await getSql()`
+    DELETE FROM auth_events WHERE id NOT IN (
+      SELECT id FROM auth_events ORDER BY at_ms DESC, id DESC LIMIT ${AUTH_EVENT_MAX}
+    )
+  `;
+}
+
+/** Newest security events for the superadmin panel (time-pruned on read). */
+export async function listAuthEvents(limit = 100): Promise<AuthEvent[]> {
+  const n = Math.min(500, Math.max(1, Math.floor(limit)));
+  await ensureSchema();
+  const cutoff = Date.now() - AUTH_EVENT_TTL_MS;
+  await getSql()`DELETE FROM auth_events WHERE at_ms < ${cutoff}`;
+  const rows = await getSql()`
+    SELECT id, type, email, ip, device, at_ms
+    FROM auth_events ORDER BY at_ms DESC, id DESC LIMIT ${n}
+  `;
+  return (rows as {
+    id: string;
+    type: string;
+    email: string | null;
+    ip: string | null;
+    device: string | null;
+    at_ms: string | number;
+  }[]).map((r) => ({
+    id: r.id,
+    type: r.type as AuthEventType,
+    email: r.email ?? null,
+    ip: r.ip ?? null,
+    device: r.device ?? null,
+    at: Number(r.at_ms),
+  }));
 }

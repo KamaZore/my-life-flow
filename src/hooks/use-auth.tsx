@@ -31,6 +31,7 @@ import {
   validateSignInPassword,
 } from "@/lib/validate";
 import { rateCheck, rateClear, rateFail } from "@/lib/rate-limit";
+import { trackSecurityEvent } from "@/lib/security";
 
 /**
  * Auth backend backed by the app's own Neon Postgres `users` table
@@ -149,15 +150,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Brute-force backoff: a few wrong tries lock this email for a while
       // (persisted in localStorage, so reloading does not reset the count).
       const gate = rateCheck(`signin:${normalized}`);
-      if (!gate.ok) throw new Error("ratelimit");
+      if (!gate.ok) {
+        // Someone is hammering this account — log it with IP + device.
+        trackSecurityEvent("signin_blocked", normalized);
+        throw new Error("ratelimit");
+      }
       const row = await getAuthRow(normalized);
       if (!row) {
         rateFail(`signin:${normalized}`);
+        trackSecurityEvent("signin_fail", normalized);
         throw new Error("invalid");
       }
       const ok = await bcrypt.compare(password, row.password_hash);
       if (!ok) {
         rateFail(`signin:${normalized}`);
+        trackSecurityEvent("signin_fail", normalized);
         throw new Error("invalid");
       }
       rateClear(`signin:${normalized}`);
@@ -194,7 +201,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!gate.ok) throw new Error("ratelimit");
         rateFail(`signup:${normalized}`);
         const existing = await findUserByEmail(normalized);
-        if (existing) throw new Error("exists");
+        if (existing) {
+          // Registration probing an existing account — log it.
+          trackSecurityEvent("signup_exists", normalized);
+          throw new Error("exists");
+        }
         const hash = await bcrypt.hash(password, 10);
         // First account in an empty database becomes the super admin.
         const total = await countUsers();

@@ -16,6 +16,7 @@ import {
   deleteUser,
   getAppData,
   getAuthRow,
+  listAuthEvents,
   listUsersPage,
   resetUserPassword,
   setUserPermissions,
@@ -23,6 +24,8 @@ import {
   updateUserProfile,
   createUser,
   DEFAULT_PERMS,
+  type AuthEvent,
+  type AuthEventType,
   type SystemPerms,
   type UserRole,
 } from "@/lib/db";
@@ -56,6 +59,7 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  ShieldAlert,
   ShieldCheck,
   Trash2,
   UserPlus,
@@ -92,6 +96,15 @@ function formatStamp(at: number) {
     minute: "2-digit",
   })}`;
 }
+
+/** Badge style + i18n key per security event type (attack log). */
+const SEC_TYPE: Record<AuthEventType, { key: string; cls: string }> = {
+  signin_fail: { key: "sa.t.signinFail", cls: "bg-amber-500/15 text-amber-600 dark:text-amber-400" },
+  signin_blocked: { key: "sa.t.signinBlocked", cls: "bg-red-500/15 text-red-600 dark:text-red-400" },
+  signup_exists: { key: "sa.t.signupExists", cls: "bg-violet-500/15 text-violet-600 dark:text-violet-400" },
+  sa_fail: { key: "sa.t.saFail", cls: "bg-red-500/15 text-red-600 dark:text-red-400" },
+  sa_blocked: { key: "sa.t.saBlocked", cls: "bg-red-600/20 text-red-700 dark:text-red-400" },
+};
 
 function summarize(d: unknown): {
   life: number;
@@ -152,7 +165,11 @@ export default function SuperAdminPanel() {
   const [moduleAccent, setModuleAccent] = useState(ACCENTS[0]);
   const [siteDraft, setSiteDraft] = useState<SiteContent>(defaultSiteContent);
   const [siteBusy, setSiteBusy] = useState(false);
-  const [activeSection, setActiveSection] = useState<"users" | "site" | "modules">("users");
+  const [activeSection, setActiveSection] = useState<"users" | "site" | "modules" | "security">("users");
+  // Security section: failed / blocked sign-in attempts (auth_events table).
+  const [secEvents, setSecEvents] = useState<AuthEvent[]>([]);
+  const [secBusy, setSecBusy] = useState(false);
+  const [secNonce, setSecNonce] = useState(0);
 
   const visibleUsers = users.length;
   const visibleAdmins = users.filter((u) => u.role === "superadmin").length;
@@ -173,6 +190,26 @@ export default function SuperAdminPanel() {
   const [ePerms, setEPerms] = useState<SystemPerms>({ ...DEFAULT_PERMS });
   const [newPassword, setNewPassword] = useState("");
   const [eBusy, setEBusy] = useState(false);
+
+  // Load the attack log when its tab opens (and on manual refresh).
+  useEffect(() => {
+    if (activeSection !== "security") return;
+    let cancelled = false;
+    setSecBusy(true);
+    listAuthEvents(100)
+      .then((events) => {
+        if (!cancelled) setSecEvents(events);
+      })
+      .catch(() => {
+        if (!cancelled) setSecEvents([]);
+      })
+      .finally(() => {
+        if (!cancelled) setSecBusy(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSection, secNonce]);
 
   const refresh = useCallback(async (requestedPage = page) => {
     setLoading(true);
@@ -453,6 +490,7 @@ export default function SuperAdminPanel() {
             ["users", t("sa.menuUsers"), Users],
             ["site", t("sa.menuSiteContent"), Sparkles],
             ["modules", t("sa.menuModules"), Blocks],
+            ["security", t("sa.menuSecurity"), ShieldAlert],
           ] as const).map(([id, label, Icon]) => (
             <Button
               key={id}
@@ -709,6 +747,52 @@ export default function SuperAdminPanel() {
           </div>
           <p className="text-[11px] text-muted-foreground">{t("sa.modulesSecurityNote")}</p>
         </section>
+        </div>
+        )}
+
+        {activeSection === "security" && (
+        <div className="space-y-4">
+          <section className="rounded-2xl border border-red-500/20 bg-red-500/[.04] p-4">
+            <div className="flex items-start gap-3">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-red-500/10 text-red-600"><ShieldAlert className="size-4" /></span>
+              <div className="min-w-0">
+                <h2 className="text-sm font-bold">{t("sa.secTitle")}</h2>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">{t("sa.secSub")}</p>
+              </div>
+            </div>
+          </section>
+
+          <div className="flex justify-end">
+            <Button variant="outline" size="sm" onClick={() => setSecNonce((n) => n + 1)} disabled={secBusy} className="gap-1.5 rounded-lg">
+              <RefreshCw className={"size-3.5" + (secBusy ? " animate-spin" : "")} />
+              {t("common.refresh") ?? "Refresh"}
+            </Button>
+          </div>
+
+          {secBusy && <IosSpinner label={t("sa.loading")} className="py-10" />}
+
+          {!secBusy && secEvents.length === 0 && (
+            <div className="rounded-2xl border border-dashed border-border/70 p-10 text-center">
+              <ShieldAlert className="mx-auto mb-2 size-8 text-muted-foreground/50" />
+              <p className="text-sm text-muted-foreground">{t("sa.secEmpty")}</p>
+            </div>
+          )}
+
+          {!secBusy && secEvents.length > 0 && (
+            <div className="space-y-2">
+              {secEvents.map((e) => (
+                <div key={e.id} className="card-soft flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-border/60 bg-card px-4 py-3">
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${SEC_TYPE[e.type]?.cls ?? "bg-muted text-muted-foreground"}`}>
+                    {t(SEC_TYPE[e.type]?.key ?? "sa.menuSecurity")}
+                  </span>
+                  <p className="min-w-0 flex-1 truncate text-xs font-medium">{e.email ?? "—"}</p>
+                  <p className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{e.ip ?? "—"}</p>
+                  <p className="max-w-[45%] truncate text-[10px] text-muted-foreground" title={e.device ?? undefined}>{e.device ?? "—"}</p>
+                  <p className="text-[10px] tabular-nums text-muted-foreground">{formatStamp(e.at)}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         )}
 

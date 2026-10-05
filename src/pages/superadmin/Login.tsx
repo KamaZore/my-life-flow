@@ -5,6 +5,7 @@ import { useI18n } from "@/lib/i18n";
 import { getAuthRow } from "@/lib/db";
 import { authErrorCode, normalizeEmail } from "@/lib/validate";
 import { rateCheck, rateClear, rateFail } from "@/lib/rate-limit";
+import { trackSecurityEvent } from "@/lib/security";
 import { readSaSession, writeSaSession } from "@/lib/superadmin";
 import { uid } from "@/lib/store";
 import bcrypt from "bcryptjs";
@@ -38,15 +39,20 @@ export default function SuperAdminLogin() {
       const normalized = normalizeEmail(email);
       // Same backoff as the app sign-in: the admin door is throttled too.
       const gate = rateCheck(`sa:${normalized}`);
-      if (!gate.ok) throw new Error("ratelimit");
+      if (!gate.ok) {
+        trackSecurityEvent("sa_blocked", normalized);
+        throw new Error("ratelimit");
+      }
       const row = await getAuthRow(normalized);
       if (!row || row.role !== "superadmin") {
         rateFail(`sa:${normalized}`);
+        trackSecurityEvent("sa_fail", normalized);
         throw new Error("forbidden");
       }
       const ok = await bcrypt.compare(password, row.password_hash);
       if (!ok) {
         rateFail(`sa:${normalized}`);
+        trackSecurityEvent("sa_fail", normalized);
         throw new Error("invalid");
       }
       rateClear(`sa:${normalized}`);

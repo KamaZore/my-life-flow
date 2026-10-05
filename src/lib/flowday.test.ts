@@ -80,6 +80,8 @@ import {
   RATE_WINDOW_MS,
   type RateMap,
 } from "./rate-limit";
+import { buildDeviceLabel, looksLikeIp } from "./security";
+import { recordAuthEvent, type AuthEventType } from "./db";
 
 /* ------------------------------------------------------------------ */
 /* parse.ts — smart capture                                            */
@@ -919,5 +921,62 @@ describe("session token refresh", () => {
     expect(SESSION_TTL_MS).toBeGreaterThan(SESSION_REFRESH_MS);
     expect(sessionAction(NOW - SESSION_TTL_MS, NOW)).toBe("refresh"); // exactly at the edge
     expect(sessionAction(NOW - SESSION_TTL_MS - 1, NOW)).toBe("expired");
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* security.ts — IP + device telemetry for the attack log              */
+/* ------------------------------------------------------------------ */
+
+describe("security telemetry", () => {
+  test("looksLikeIp accepts IPv4/IPv6 shapes and rejects junk", () => {
+    expect(looksLikeIp("103.28.54.1")).toBe(true);
+    expect(looksLikeIp("2001:db8::1")).toBe(true);
+    expect(looksLikeIp("::1")).toBe(true); // loopback IPv6
+    expect(looksLikeIp("evil.com")).toBe(false);
+    expect(looksLikeIp("localhost")).toBe(false); // no separator
+    expect(looksLikeIp("")).toBe(false);
+    expect(looksLikeIp(123)).toBe(false);
+    expect(looksLikeIp(null)).toBe(false);
+  });
+
+  test("device label reads browser + OS from the user agent", () => {
+    const chrome = buildDeviceLabel({
+      userAgent:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+      width: 1920,
+      height: 1080,
+      language: "en-US",
+      timezone: "Asia/Phnom_Penh",
+    });
+    expect(chrome).toBe("Chrome · Windows · 1920x1080 · en-US · Asia/Phnom_Penh");
+
+    const ios = buildDeviceLabel({
+      userAgent:
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1",
+    });
+    expect(ios).toBe("Safari · iOS"); // iOS wins over the "Mac OS X" in the UA
+
+    const firefox = buildDeviceLabel({
+      userAgent: "Mozilla/5.0 (X11; Linux x86_64; rv:121.0) Gecko/20100101 Firefox/121.0",
+    });
+    expect(firefox).toBe("Firefox · Linux");
+
+    expect(buildDeviceLabel({})).toBe("");
+  });
+
+  test("device label is capped so one event stays small", () => {
+    const label = buildDeviceLabel({ platform: "x".repeat(400) });
+    expect(label.length).toBeLessThanOrEqual(180);
+  });
+
+  test("unknown event types are rejected before any SQL runs", async () => {
+    try {
+      await recordAuthEvent({ type: "bogus" as AuthEventType });
+      throw new Error("should have thrown");
+    } catch (err) {
+      expect(isValidationError(err)).toBe(true);
+      if (isValidationError(err)) expect(err.code).toBe("data");
+    }
   });
 });

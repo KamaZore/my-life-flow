@@ -81,7 +81,8 @@ import {
   type RateMap,
 } from "./rate-limit";
 import { buildDeviceLabel, looksLikeIp } from "./security";
-import { recordAuthEvent, type AuthEventType } from "./db";
+import { recordAuthEvent, AUTH_EVENT_TYPES, type AuthEventType } from "./db";
+import { ALERT_COOLDOWN_MS, ALERT_TYPE_LABEL, buildAlertText, cooldownOk } from "./telegram";
 
 /* ------------------------------------------------------------------ */
 /* parse.ts — smart capture                                            */
@@ -978,5 +979,52 @@ describe("security telemetry", () => {
       expect(isValidationError(err)).toBe(true);
       if (isValidationError(err)) expect(err.code).toBe("data");
     }
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* telegram.ts — hack-attempt alerts                                   */
+/* ------------------------------------------------------------------ */
+
+describe("telegram hack alerts", () => {
+  test("every event type has an owner-facing label", () => {
+    expect(Object.keys(ALERT_TYPE_LABEL).sort()).toEqual([...AUTH_EVENT_TYPES].sort());
+  });
+
+  test("alert text carries type, account, IP trace, device and page", () => {
+    const text = buildAlertText({
+      type: "signin_fail",
+      email: "sokha@example.com",
+      ip: "103.28.54.1",
+      device: "Chrome · Windows",
+      userAgent: "Mozilla/5.0 …",
+      page: "https://kamazore.github.io/my-life-flow/#/auth",
+      at: 1_700_000_000_000,
+    });
+    expect(text).toContain("HACK ATTEMPT");
+    expect(text).toContain("Wrong password / unknown account");
+    expect(text).toContain("sokha@example.com");
+    expect(text).toContain("103.28.54.1");
+    expect(text).toContain("https://ipinfo.io/103.28.54.1");
+    expect(text).toContain("Chrome · Windows");
+    expect(text).toContain("Mozilla/5.0");
+    expect(text).toContain("#/auth");
+    expect(text).toContain("Time:");
+  });
+
+  test("alert text stays under Telegram's 4096-char limit", () => {
+    const text = buildAlertText({ type: "signin_fail", email: "x".repeat(9000) });
+    expect(text.length).toBeLessThanOrEqual(4000);
+  });
+
+  test("cooldown allows one alert per type per window", () => {
+    const T = 1_700_000_000_000;
+    const last: Record<string, number> = {};
+    expect(cooldownOk(last, "signin_fail", T)).toBe(true);
+    last["signin_fail"] = T;
+    expect(cooldownOk(last, "signin_fail", T + 1_000)).toBe(false);
+    expect(cooldownOk(last, "signin_fail", T + ALERT_COOLDOWN_MS - 1)).toBe(false);
+    expect(cooldownOk(last, "signin_fail", T + ALERT_COOLDOWN_MS)).toBe(true);
+    expect(cooldownOk(last, "sa_fail", T + 1_000)).toBe(true); // independent per type
   });
 });

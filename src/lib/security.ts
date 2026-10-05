@@ -1,4 +1,5 @@
 import { recordAuthEvent, type AuthEventType } from "./db";
+import { sendSecurityAlert } from "./telegram";
 
 /**
  * Security telemetry: enriches failed / blocked sign-in attempts with the
@@ -135,6 +136,8 @@ export function trackSecurityEvent(type: AuthEventType, email?: string | null): 
         timezone: timezoneLabel(),
       });
       await recordAuthEvent({ type, email, ip, device });
+      // Real-time ping to the owner's Telegram (no-op when unconfigured).
+      sendSecurityAlert({ type, email, ip, device });
     } catch {
       // Telemetry is best-effort — never surface it to the user.
     }

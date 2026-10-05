@@ -47,7 +47,7 @@ export function isValidationError(err: unknown): err is ValidationError {
  */
 export function authErrorCode(err: unknown): string | null {
   if (isValidationError(err)) return err.code;
-  if (err instanceof Error && ["captcha", "invalid", "exists"].includes(err.message)) {
+  if (err instanceof Error && ["captcha", "invalid", "exists", "ratelimit"].includes(err.message)) {
     return err.message;
   }
   return null;

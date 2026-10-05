@@ -67,20 +67,54 @@ const STORAGE_KEY = "flowday-data-v1";
 /* ------------------------------------------------------------------ */
 
 export const SESSION_KEY = "flowday-session-v1";
+/** Sessions die 30 days after their last refresh (sliding expiry). */
+export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+/** The token is rotated once the session is older than this. */
+export const SESSION_REFRESH_MS = 24 * 60 * 60 * 1000;
 
 export type AppSession = {
   token: string;
   userId: string;
   email: string;
   name: string;
+  /** Last issue/refresh time (ms). Absent on pre-expiry sessions. */
+  issuedAt?: number;
 };
+
+/**
+ * What a stored session needs right now. `issuedAt === undefined` is a
+ * session created before expiry existed — stamp it, never kill it, so the
+ * rollout does not sign everyone out.
+ */
+export function sessionAction(
+  issuedAt: number | undefined,
+  now: number,
+): "expired" | "refresh" | "stamp" | "keep" {
+  if (issuedAt === undefined) return "stamp";
+  const age = now - issuedAt;
+  if (age > SESSION_TTL_MS) return "expired";
+  if (age >= SESSION_REFRESH_MS) return "refresh";
+  return "keep";
+}
 
 export function readSession(): AppSession | null {
   try {
     const raw = localStorage.getItem(SESSION_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as AppSession;
-    return parsed?.token && parsed?.userId ? parsed : null;
+    if (!parsed?.token || !parsed?.userId) return null;
+    const action = sessionAction(parsed.issuedAt, Date.now());
+    if (action === "expired") {
+      localStorage.removeItem(SESSION_KEY);
+      return null;
+    }
+    if (action === "stamp") {
+      // Anchor the expiry window at the first read after the update.
+      const stamped: AppSession = { ...parsed, issuedAt: Date.now() };
+      localStorage.setItem(SESSION_KEY, JSON.stringify(stamped));
+      return stamped;
+    }
+    return parsed;
   } catch {
     return null;
   }
@@ -93,6 +127,17 @@ export function writeSession(s: AppSession | null) {
   } catch {
     // storage unavailable — stay signed in for this tab only
   }
+}
+
+/**
+ * Token refresh: rotate the session token and restart the expiry window
+ * (sliding session). Called by the auth provider when a session is older
+ * than SESSION_REFRESH_MS — e.g. on app load.
+ */
+export function refreshSession(s: AppSession, now = Date.now()): AppSession {
+  const next: AppSession = { ...s, token: uid() + uid(), issuedAt: now };
+  writeSession(next);
+  return next;
 }
 
 /**

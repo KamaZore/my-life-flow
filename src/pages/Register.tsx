@@ -66,7 +66,9 @@ function RegisterInner() {
       setError(
         code === "captcha"
           ? t("auth.errCaptcha")
-          : code === "email"
+          : code === "ratelimit"
+            ? t("auth.errTooMany")
+            : code === "email"
             ? t("auth.emailInvalid")
             : code === "password"
               ? t("auth.errPassword")

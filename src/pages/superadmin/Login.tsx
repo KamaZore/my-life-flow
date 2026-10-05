@@ -3,7 +3,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useI18n } from "@/lib/i18n";
 import { getAuthRow } from "@/lib/db";
-import { authErrorCode } from "@/lib/validate";
+import { authErrorCode, normalizeEmail } from "@/lib/validate";
+import { rateCheck, rateClear, rateFail } from "@/lib/rate-limit";
 import { readSaSession, writeSaSession } from "@/lib/superadmin";
 import { uid } from "@/lib/store";
 import bcrypt from "bcryptjs";
@@ -34,11 +35,21 @@ export default function SuperAdminLogin() {
     setBusy(true);
     setError(null);
     try {
-      const normalized = email.trim().toLowerCase();
+      const normalized = normalizeEmail(email);
+      // Same backoff as the app sign-in: the admin door is throttled too.
+      const gate = rateCheck(`sa:${normalized}`);
+      if (!gate.ok) throw new Error("ratelimit");
       const row = await getAuthRow(normalized);
-      if (!row || row.role !== "superadmin") throw new Error("forbidden");
+      if (!row || row.role !== "superadmin") {
+        rateFail(`sa:${normalized}`);
+        throw new Error("forbidden");
+      }
       const ok = await bcrypt.compare(password, row.password_hash);
-      if (!ok) throw new Error("invalid");
+      if (!ok) {
+        rateFail(`sa:${normalized}`);
+        throw new Error("invalid");
+      }
+      rateClear(`sa:${normalized}`);
       writeSaSession({
         token: uid() + uid(),
         userId: row.id,
@@ -49,14 +60,17 @@ export default function SuperAdminLogin() {
       navigate("/superadmin/users", { replace: true });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      const code = authErrorCode(err);
       setError(
         msg === "forbidden"
           ? t("sa.notSuperAdmin")
           : msg === "invalid"
             ? t("auth.invalid")
-            : authErrorCode(err) === "email"
+            : code === "email"
               ? t("auth.emailInvalid")
-              : t("auth.dbError"),
+              : code === "ratelimit"
+                ? t("auth.errTooMany")
+                : t("auth.dbError"),
       );
     } finally {
       setBusy(false);

@@ -175,7 +175,10 @@ class ChunkErrorBoundary extends React.Component<
     const alreadyRetried = sessionStorage.getItem("flowday-chunk-reload");
     if (isChunkError && !alreadyRetried) {
       sessionStorage.setItem("flowday-chunk-reload", "1");
-      window.location.reload();
+      // Defer out of the commit that called componentDidCatch: reloading
+      // synchronously tore the document down mid-unmount and surfaced as
+      // "removeChild is not a child" plus a max-update-depth cascade.
+      setTimeout(() => window.location.reload(), 150);
     } else if (!isChunkError) {
       // A successful boot should not inherit a stale retry marker into a
       // later, unrelated runtime error.

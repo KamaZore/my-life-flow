@@ -18,6 +18,7 @@ import {
 } from "@/lib/db";
 import {
   readSession,
+  sessionAction,
   uid,
   writeSession,
 } from "@/lib/store";
@@ -29,6 +30,7 @@ import {
   validateNewPassword,
   validateSignInPassword,
 } from "@/lib/validate";
+import { rateCheck, rateClear, rateFail } from "@/lib/rate-limit";
 
 /**
  * Auth backend backed by the app's own Neon Postgres `users` table
@@ -63,6 +65,8 @@ type StoredSession = {
   name: string;
   role?: "user" | "superadmin";
   perms?: SystemPerms;
+  /** Last issue/refresh time - drives token rotation + sliding expiry. */
+  issuedAt?: number;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -96,12 +100,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (cancelled || !row) return;
         const nextRole = row.role === "superadmin" ? ("superadmin" as const) : ("user" as const);
         const nextPerms = effectivePerms(row.role, row.permissions);
+        // Sliding session: rotate the token when this one is stale. The
+        // decision (and the token) are computed OUTSIDE the updater so a
+        // StrictMode double-invoke reuses one token instead of spinning.
+        const rotate = sessionAction(session.issuedAt, Date.now()) === "refresh";
+        const rotatedToken = rotate ? uid() + uid() : null;
+        const rotatedAt = rotate ? Date.now() : 0;
         setSession((prev) => {
           if (!prev) return prev;
-          if (prev.role === nextRole && JSON.stringify(prev.perms) === JSON.stringify(nextPerms)) {
+          if (
+            prev.role === nextRole &&
+            JSON.stringify(prev.perms) === JSON.stringify(nextPerms) &&
+            !rotatedToken
+          ) {
             return prev;
           }
           const updated = { ...prev, role: nextRole, perms: nextPerms };
+          if (rotatedToken) {
+            updated.token = rotatedToken;
+            updated.issuedAt = rotatedAt;
+          }
           writeSession(updated as unknown as ReturnType<typeof readSession>);
           return updated;
         });
@@ -128,12 +146,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // a typed code the pages map to an i18n message (validate.ts).
       const normalized = normalizeEmail(email);
       validateSignInPassword(password);
+      // Brute-force backoff: a few wrong tries lock this email for a while
+      // (persisted in localStorage, so reloading does not reset the count).
+      const gate = rateCheck(`signin:${normalized}`);
+      if (!gate.ok) throw new Error("ratelimit");
       const row = await getAuthRow(normalized);
-      if (!row) throw new Error("invalid");
+      if (!row) {
+        rateFail(`signin:${normalized}`);
+        throw new Error("invalid");
+      }
       const ok = await bcrypt.compare(password, row.password_hash);
-      if (!ok) throw new Error("invalid");
+      if (!ok) {
+        rateFail(`signin:${normalized}`);
+        throw new Error("invalid");
+      }
+      rateClear(`signin:${normalized}`);
       const next: StoredSession = {
         token: uid() + uid(),
+        issuedAt: Date.now(),
         userId: row.id,
         email: row.email,
         name: row.name,
@@ -158,6 +188,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const normalized = normalizeEmail(email);
         const cleanName = validateName(name);
         validateNewPassword(password);
+        // Registration is throttled per email too: one attempt is counted
+        // up front, cleared again once the account exists.
+        const gate = rateCheck(`signup:${normalized}`);
+        if (!gate.ok) throw new Error("ratelimit");
+        rateFail(`signup:${normalized}`);
         const existing = await findUserByEmail(normalized);
         if (existing) throw new Error("exists");
         const hash = await bcrypt.hash(password, 10);
@@ -173,8 +208,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           role,
           isFirst ? effectivePerms(role, null) : undefined,
         );
+        rateClear(`signup:${normalized}`);
         const next: StoredSession = {
           token: uid() + uid(),
+          issuedAt: Date.now(),
           userId: created.id,
           email: created.email,
           name: created.name,
@@ -193,10 +230,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     writeSession(null);
     setSession(null);
-    // Reload at the app's base path. BASE_URL is "./" on GitHub Pages
+    // Defer the navigation a tick: calling location.assign() while React is
+    // still committing the sign-out unmount raced the browser's document
+    // teardown against React's DOM removal ("removeChild is not a child").
+    // Reload at the app's base path - BASE_URL is "./" on GitHub Pages
     // (resolves to /my-life-flow/) and "/" in local dev, so signing out
     // never escapes the app's subpath (a bare "/" lands on GitHub's 404).
-    window.location.assign(import.meta.env.BASE_URL);
+    setTimeout(() => window.location.assign(import.meta.env.BASE_URL), 100);
   }, []);
 
   const value = useMemo<AuthContextValue>(

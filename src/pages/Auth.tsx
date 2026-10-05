@@ -63,7 +63,9 @@ function AuthInner() {
           ? t("auth.errCaptcha")
           : code === "email"
             ? t("auth.emailInvalid")
-            : t("auth.errInvalid"),
+            : code === "ratelimit"
+              ? t("auth.errTooMany")
+              : t("auth.errInvalid"),
       );
     } finally {
       setBusy(false);

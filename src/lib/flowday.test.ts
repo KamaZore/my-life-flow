@@ -43,6 +43,9 @@ import {
   logActivity,
   resetDemoData,
   scheduleProcess,
+  sessionAction,
+  SESSION_REFRESH_MS,
+  SESSION_TTL_MS,
   toggleHabitDate,
   toggleSubtask,
   toggleTask,
@@ -67,6 +70,16 @@ import {
   validateUserId,
   ValidationError,
 } from "./validate";
+import {
+  backoffMs,
+  clearRate,
+  evalRate,
+  failRate,
+  RATE_MAX_BLOCK_MS,
+  RATE_STEP_MS,
+  RATE_WINDOW_MS,
+  type RateMap,
+} from "./rate-limit";
 
 /* ------------------------------------------------------------------ */
 /* parse.ts — smart capture                                            */
@@ -830,5 +843,81 @@ describe("validate (backend API)", () => {
     expect(authErrorCode(new Error("invalid"))).toBe("invalid");
     expect(authErrorCode(new Error("boom"))).toBeNull();
     expect(authErrorCode("boom")).toBeNull();
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* rate-limit.ts — auth attempt backoff                                */
+/* ------------------------------------------------------------------ */
+
+describe("rate limit (auth backoff)", () => {
+  const T = 1_700_000_000_000;
+
+  test("first attempts are free, then the delay doubles and caps", () => {
+    expect(backoffMs(0)).toBe(0);
+    expect(backoffMs(2)).toBe(0);
+    expect(backoffMs(3)).toBe(RATE_STEP_MS);
+    expect(backoffMs(4)).toBe(RATE_STEP_MS * 2);
+    expect(backoffMs(5)).toBe(RATE_STEP_MS * 4);
+    expect(backoffMs(50)).toBe(RATE_MAX_BLOCK_MS);
+  });
+
+  test("third failure blocks with a countdown, then the block lapses", () => {
+    let map: RateMap = {};
+    expect(evalRate(map, "k", T)).toEqual({ ok: true });
+    map = failRate(map, "k", T);
+    map = failRate(map, "k", T);
+    expect(evalRate(map, "k", T)).toEqual({ ok: true });
+
+    map = failRate(map, "k", T); // third failure → RATE_STEP_MS block
+    const blocked = evalRate(map, "k", T + 4_000);
+    expect(blocked.ok).toBe(false);
+    if (!blocked.ok) expect(blocked.retryInMs).toBe(RATE_STEP_MS - 4_000);
+
+    expect(evalRate(map, "k", T + RATE_STEP_MS + 1)).toEqual({ ok: true });
+  });
+
+  test("success clears the key and an idle window resets the counter", () => {
+    let map: RateMap = {};
+    map = failRate(map, "k", T);
+    map = failRate(map, "k", T);
+    map = clearRate(map, "k");
+    expect(evalRate(map, "k", T)).toEqual({ ok: true });
+    expect(clearRate({}, "missing")).toEqual({}); // no-op on unknown keys
+
+    // Two failures, then 15+ quiet minutes: the window starts over, so the
+    // next failure counts as #1 (no block) instead of #3.
+    map = failRate({}, "k", T);
+    map = failRate(map, "k", T);
+    const later = T + RATE_WINDOW_MS + 1;
+    expect(evalRate(map, "k", later)).toEqual({ ok: true });
+    map = failRate(map, "k", later);
+    expect(map["k"].fails).toBe(1);
+    expect(map["k"].blockedUntil).toBe(0);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* session token refresh (sliding expiry)                              */
+/* ------------------------------------------------------------------ */
+
+describe("session token refresh", () => {
+  const NOW = 1_700_000_000_000;
+
+  test("sessions from before expiry existed are stamped, not signed out", () => {
+    expect(sessionAction(undefined, NOW)).toBe("stamp");
+  });
+
+  test("fresh sessions are kept; stale tokens refresh after a day", () => {
+    expect(sessionAction(NOW - 60_000, NOW)).toBe("keep");
+    expect(sessionAction(NOW - SESSION_REFRESH_MS + 1, NOW)).toBe("keep");
+    expect(sessionAction(NOW - SESSION_REFRESH_MS, NOW)).toBe("refresh");
+    expect(sessionAction(NOW - SESSION_REFRESH_MS * 5, NOW)).toBe("refresh");
+  });
+
+  test("sessions die only after the full TTL, past the refresh window", () => {
+    expect(SESSION_TTL_MS).toBeGreaterThan(SESSION_REFRESH_MS);
+    expect(sessionAction(NOW - SESSION_TTL_MS, NOW)).toBe("refresh"); // exactly at the edge
+    expect(sessionAction(NOW - SESSION_TTL_MS - 1, NOW)).toBe("expired");
   });
 });

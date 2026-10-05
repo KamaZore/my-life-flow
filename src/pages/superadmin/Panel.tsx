@@ -35,7 +35,7 @@ import {
   useModules,
   type AppModule,
 } from "@/lib/modules";
-import { readSaSession, writeSaSession } from "@/lib/superadmin";
+import { readSaSession, refreshSaSession, saSessionNeedsRefresh, writeSaSession } from "@/lib/superadmin";
 import {
   authErrorCode,
   validateNewPassword,
@@ -203,6 +203,9 @@ export default function SuperAdminPanel() {
         navigate("/superadmin", { replace: true });
         return;
       }
+      // Sliding session: rotate a stale panel token now that the role has
+      // been re-validated against the database.
+      if (saSessionNeedsRefresh(session)) refreshSaSession(session);
       void refresh(1);
       void loadModules().then(setModules);
       void loadSiteContent().then((loadedContent) => setSiteDraft(loadedContent));

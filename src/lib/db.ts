@@ -1,4 +1,16 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
+import {
+  ValidationError,
+  normalizeEmail,
+  validateAppData,
+  validateBcryptHash,
+  validateConfigKey,
+  validateConfigValue,
+  validateName,
+  validatePermissions,
+  validateRole,
+  validateUserId,
+} from "./validate";
 
 /**
  * Neon Postgres backend (replaces Convex).
@@ -9,6 +21,11 @@ import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
  * owner/session checks to prevent accidental cross-account access, but the
  * production boundary must be a server/edge proxy using a private Neon
  * credential plus the RLS migration in scripts/security-migration.sql.
+ *
+ * Because these functions ARE the API boundary, every write path validates
+ * its inputs first (src/lib/validate.ts): malformed emails, ids, roles,
+ * permissions, bcrypt hashes and oversized JSON documents are rejected with
+ * a typed ValidationError before any SQL statement is built.
  *
  * Do not ship a privileged public connection string. See docs/SECURITY.md for
  * the required deployment boundary and API contract.
@@ -107,15 +124,19 @@ export const DEFAULT_PERMS: SystemPerms = {
   admin: false,
 };
 
+/** Known permission flags — validatePermissions whitelists against these. */
+const PERM_KEYS = Object.keys(DEFAULT_PERMS) as (keyof SystemPerms)[];
+
 export type DbUserFull = DbUser & {
   role: UserRole;
   permissions: SystemPerms;
 };
 
 export async function findUserByEmail(email: string): Promise<DbUser | null> {
+  const key = normalizeEmail(email);
   await ensureSchema();
   const rows = await getSql()`
-    SELECT id, name, email FROM users WHERE email = ${email} LIMIT 1
+    SELECT id, name, email FROM users WHERE email = ${key} LIMIT 1
   `;
   const row = rows[0] as DbUser | undefined;
   return row ?? null;
@@ -125,10 +146,11 @@ export async function findUserByEmail(email: string): Promise<DbUser | null> {
 export async function getAuthRow(
   email: string,
 ): Promise<(DbUserFull & { password_hash: string }) | null> {
+  const key = normalizeEmail(email);
   await ensureSchema();
   const rows = await getSql()`
     SELECT id, name, email, role, permissions, password_hash
-    FROM users WHERE email = ${email} LIMIT 1
+    FROM users WHERE email = ${key} LIMIT 1
   `;
   const row = rows[0] as
     | (DbUserFull & { password_hash: string; permissions: SystemPerms | null })
@@ -201,18 +223,22 @@ export async function listUsers(): Promise<DbUserSummary[]> {
 }
 
 export async function setUserRole(id: string, role: UserRole): Promise<void> {
+  const userId = validateUserId(id);
+  const nextRole = validateRole(role);
   await ensureSchema();
-  await getSql()`UPDATE users SET role = ${role} WHERE id = ${id}`;
+  await getSql()`UPDATE users SET role = ${nextRole} WHERE id = ${userId}`;
 }
 
 export async function setUserPermissions(
   id: string,
   permissions: SystemPerms,
 ): Promise<void> {
+  const userId = validateUserId(id);
+  const perms = validatePermissions(permissions, PERM_KEYS);
   await ensureSchema();
   await getSql()`
-    UPDATE users SET permissions = ${JSON.stringify(permissions)}::jsonb
-    WHERE id = ${id}
+    UPDATE users SET permissions = ${JSON.stringify(perms)}::jsonb
+    WHERE id = ${userId}
   `;
 }
 
@@ -221,22 +247,28 @@ export async function updateUserProfile(
   name: string,
   email: string,
 ): Promise<void> {
+  const userId = validateUserId(id);
+  const cleanName = validateName(name);
+  const cleanEmail = normalizeEmail(email);
   await ensureSchema();
-  await getSql()`UPDATE users SET name = ${name}, email = ${email} WHERE id = ${id}`;
+  await getSql()`UPDATE users SET name = ${cleanName}, email = ${cleanEmail} WHERE id = ${userId}`;
 }
 
 export async function resetUserPassword(
   id: string,
   passwordHash: string,
 ): Promise<void> {
+  const userId = validateUserId(id);
+  const hash = validateBcryptHash(passwordHash);
   await ensureSchema();
-  await getSql()`UPDATE users SET password_hash = ${passwordHash} WHERE id = ${id}`;
+  await getSql()`UPDATE users SET password_hash = ${hash} WHERE id = ${userId}`;
 }
 
 export async function deleteUser(id: string): Promise<void> {
+  const userId = validateUserId(id);
   await ensureSchema();
   // app_data rows cascade (FK ON DELETE CASCADE)
-  await getSql()`DELETE FROM users WHERE id = ${id}`;
+  await getSql()`DELETE FROM users WHERE id = ${userId}`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -244,28 +276,32 @@ export async function deleteUser(id: string): Promise<void> {
 /* ------------------------------------------------------------------ */
 
 export async function getConfig(key: string): Promise<unknown | null> {
+  const configKey = validateConfigKey(key);
   await ensureSchema();
   const rows = await getSql()`
-    SELECT value FROM app_config WHERE key = ${key} LIMIT 1
+    SELECT value FROM app_config WHERE key = ${configKey} LIMIT 1
   `;
   const row = rows[0] as { value: unknown } | undefined;
   return row ? row.value : null;
 }
 
 export async function setConfig(key: string, value: unknown): Promise<void> {
+  const configKey = validateConfigKey(key);
+  const json = validateConfigValue(value);
   await ensureSchema();
   await getSql()`
     INSERT INTO app_config (key, value, updated_at)
-    VALUES (${key}, ${JSON.stringify(value)}::jsonb, now())
+    VALUES (${configKey}, ${json}::jsonb, now())
     ON CONFLICT (key)
     DO UPDATE SET value = EXCLUDED.value, updated_at = now()
   `;
 }
 
 export async function getUserHash(email: string): Promise<string | null> {
+  const key = normalizeEmail(email);
   await ensureSchema();
   const rows = await getSql()`
-    SELECT password_hash FROM users WHERE email = ${email} LIMIT 1
+    SELECT password_hash FROM users WHERE email = ${key} LIMIT 1
   `;
   const row = rows[0] as { password_hash: string } | undefined;
   return row ? row.password_hash : null;
@@ -279,14 +315,29 @@ export async function createUser(
   role: UserRole = "user",
   permissions?: SystemPerms,
 ): Promise<DbUser> {
+  const userId = validateUserId(id);
+  const cleanName = validateName(name);
+  const cleanEmail = normalizeEmail(email);
+  const hash = validateBcryptHash(passwordHash);
+  const cleanRole = validateRole(role);
+  const perms = permissions ? validatePermissions(permissions, PERM_KEYS) : DEFAULT_PERMS;
   await ensureSchema();
-  const rows = await getSql()`
-    INSERT INTO users (id, name, email, password_hash, role, permissions)
-    VALUES (${id}, ${name}, ${email}, ${passwordHash}, ${role},
-            ${JSON.stringify(permissions ?? DEFAULT_PERMS)}::jsonb)
-    RETURNING id, name, email
-  `;
-  return rows[0] as DbUser;
+  try {
+    const rows = await getSql()`
+      INSERT INTO users (id, name, email, password_hash, role, permissions)
+      VALUES (${userId}, ${cleanName}, ${cleanEmail}, ${hash}, ${cleanRole},
+              ${JSON.stringify(perms)}::jsonb)
+      RETURNING id, name, email
+    `;
+    return rows[0] as DbUser;
+  } catch (err) {
+    // Race-safe duplicate check: the UNIQUE index is the real guarantee,
+    // the pre-check in the auth flow only gives a nicer message.
+    if (/duplicate key|unique constraint/i.test(String(err))) {
+      throw new ValidationError("exists", "email", "Email already registered");
+    }
+    throw err;
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -294,27 +345,30 @@ export async function createUser(
 /* ------------------------------------------------------------------ */
 
 export async function getAppData(userId: string): Promise<unknown | null> {
+  const id = validateUserId(userId);
   await ensureSchema();
   const rows = await getSql()`
-    SELECT data FROM app_data WHERE user_id = ${userId} LIMIT 1
+    SELECT data FROM app_data WHERE user_id = ${id} LIMIT 1
   `;
   const row = rows[0] as { data: unknown } | undefined;
   return row ? row.data : null;
 }
 
 export async function hasAppData(userId: string): Promise<boolean> {
+  const id = validateUserId(userId);
   await ensureSchema();
   const rows = await getSql()`
-    SELECT 1 AS one FROM app_data WHERE user_id = ${userId} LIMIT 1
+    SELECT 1 AS one FROM app_data WHERE user_id = ${id} LIMIT 1
   `;
   return rows.length > 0;
 }
 
 export async function saveAppData(userId: string, data: unknown): Promise<void> {
+  const { userId: id, json } = validateAppData(userId, data);
   await ensureSchema();
   await getSql()`
     INSERT INTO app_data (user_id, data, updated_at)
-    VALUES (${userId}, ${JSON.stringify(data)}::jsonb, now())
+    VALUES (${id}, ${json}::jsonb, now())
     ON CONFLICT (user_id)
     DO UPDATE SET data = EXCLUDED.data, updated_at = now()
   `;

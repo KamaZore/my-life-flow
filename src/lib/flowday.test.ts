@@ -51,6 +51,22 @@ import {
   updateTask,
 } from "./store";
 import type { Habit, Process, Task } from "./types";
+import {
+  authErrorCode,
+  isValidationError,
+  normalizeEmail,
+  validateAppData,
+  validateBcryptHash,
+  validateConfigKey,
+  validateConfigValue,
+  validateName,
+  validateNewPassword,
+  validatePermissions,
+  validateRole,
+  validateSignInPassword,
+  validateUserId,
+  ValidationError,
+} from "./validate";
 
 /* ------------------------------------------------------------------ */
 /* parse.ts — smart capture                                            */
@@ -709,5 +725,110 @@ describe("store", () => {
     expect(importData(exported)).toBe(true);
     expect(getData().activity.length).toBe(1);
     expect(getData().activity[0].type).toBe("login");
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* validate.ts — backend API input validation                          */
+/* ------------------------------------------------------------------ */
+
+describe("validate (backend API)", () => {
+  /** Run a validator and return the typed code it threw (null = accepted). */
+  const codeOf = (fn: () => unknown): string | null => {
+    try {
+      fn();
+      return null;
+    } catch (err) {
+      return authErrorCode(err);
+    }
+  };
+
+  test("normalizeEmail trims + lowercases for storage/lookup", () => {
+    expect(normalizeEmail("  Sokha@Gmail.COM ")).toBe("sokha@gmail.com");
+  });
+
+  test("malformed emails are rejected with code 'email'", () => {
+    for (const bad of ["", "   ", "no-at-sign", "a@b", "a b@c.com", "a@@b.com", 42]) {
+      expect(codeOf(() => normalizeEmail(bad))).toBe("email");
+    }
+  });
+
+  test("sign-in only checks password presence/size (legacy passwords still work)", () => {
+    expect(validateSignInPassword("abc")).toBe("abc");
+    expect(codeOf(() => validateSignInPassword(""))).toBe("password");
+    expect(codeOf(() => validateSignInPassword("x".repeat(1001)))).toBe("password");
+  });
+
+  test("new passwords enforce the 8..200 policy", () => {
+    expect(validateNewPassword("12345678")).toBe("12345678");
+    expect(codeOf(() => validateNewPassword("1234567"))).toBe("password");
+    expect(codeOf(() => validateNewPassword("x".repeat(201)))).toBe("password");
+  });
+
+  test("names are trimmed, optional and length-capped", () => {
+    expect(validateName("  Sokha  ")).toBe("Sokha");
+    expect(validateName("")).toBe("");
+    expect(codeOf(() => validateName("x".repeat(81)))).toBe("name");
+  });
+
+  test("user ids must match the uid() format", () => {
+    expect(validateUserId("abc123XYZ_-")).toBe("abc123XYZ_-");
+    expect(codeOf(() => validateUserId("has space"))).toBe("id");
+    expect(codeOf(() => validateUserId(""))).toBe("id");
+    expect(codeOf(() => validateUserId(123))).toBe("id");
+  });
+
+  test("roles are a closed whitelist", () => {
+    expect(validateRole("user")).toBe("user");
+    expect(validateRole("superadmin")).toBe("superadmin");
+    expect(codeOf(() => validateRole("admin"))).toBe("role");
+  });
+
+  test("permissions are whitelisted, strictly boolean, missing keys default false", () => {
+    const keys = ["life", "expense", "admin"] as const;
+    const out = validatePermissions({ life: true, admin: false, futureSystem: true }, keys);
+    expect(out).toEqual({ life: true, expense: false, admin: false });
+    expect(codeOf(() => validatePermissions({ life: "yes" }, keys))).toBe("permissions");
+    expect(codeOf(() => validatePermissions("nope", keys))).toBe("permissions");
+    expect(codeOf(() => validatePermissions([], keys))).toBe("permissions");
+  });
+
+  test("write paths require a bcrypt hash, never plaintext", () => {
+    const hash = "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
+    expect(validateBcryptHash(hash)).toBe(hash);
+    expect(codeOf(() => validateBcryptHash("plaintext"))).toBe("password");
+    expect(codeOf(() => validateBcryptHash("$2a$10$too-short"))).toBe("password");
+  });
+
+  test("app data must be a plain object under the size cap", () => {
+    expect(validateAppData("user1", { tasks: [] }).json).toBe('{"tasks":[]}');
+    expect(codeOf(() => validateAppData("user1", []))).toBe("data");
+    expect(codeOf(() => validateAppData("user1", null))).toBe("data");
+    expect(codeOf(() => validateAppData("bad id", {}))).toBe("id");
+    expect(codeOf(() => validateAppData("user1", { blob: "x".repeat(4_000_001) }))).toBe("data");
+  });
+
+  test("circular documents are rejected instead of crashing the sync", () => {
+    const a: Record<string, unknown> = {};
+    a.self = a;
+    expect(codeOf(() => validateAppData("user1", a))).toBe("data");
+  });
+
+  test("config keys/values are shape- and size-checked", () => {
+    expect(validateConfigKey("site-content")).toBe("site-content");
+    expect(codeOf(() => validateConfigKey("bad key!"))).toBe("config");
+    expect(validateConfigValue({ ok: true })).toBe('{"ok":true}');
+    expect(codeOf(() => validateConfigValue("x".repeat(1_000_001)))).toBe("config");
+  });
+
+  test("authErrorCode passes through validation and auth-flow codes", () => {
+    const ve = new ValidationError("email", "email", "bad");
+    expect(isValidationError(ve)).toBe(true);
+    expect(isValidationError(new Error("x"))).toBe(false);
+    expect(authErrorCode(ve)).toBe("email");
+    expect(authErrorCode(new Error("captcha"))).toBe("captcha");
+    expect(authErrorCode(new Error("invalid"))).toBe("invalid");
+    expect(authErrorCode(new Error("boom"))).toBeNull();
+    expect(authErrorCode("boom")).toBeNull();
   });
 });

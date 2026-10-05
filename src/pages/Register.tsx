@@ -9,6 +9,7 @@ import { TurnstileWidget, turnstileEnabled } from "@/components/app/Turnstile";
 import { OfflineBanner } from "@/components/app/OfflineBanner";
 import { hasDb } from "@/lib/db";
 import { useI18n } from "@/lib/i18n";
+import { authErrorCode } from "@/lib/validate";
 
 function resolveRedirect(returnTo: string | null, fallback = "/select-system") {
   if (returnTo?.startsWith("/") && !returnTo.startsWith("//")) return returnTo;
@@ -60,13 +61,20 @@ function RegisterInner() {
       await signUp(name, email, password, tsToken);
       // Auth state flip navigates via the effect above.
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      // Server-side validation codes (validate.ts) → translated messages.
+      const code = authErrorCode(err);
       setError(
-        msg === "captcha"
+        code === "captcha"
           ? t("auth.errCaptcha")
-          : /exists/i.test(msg)
-            ? t("auth.errExists")
-            : t("auth.errGeneric"),
+          : code === "email"
+            ? t("auth.emailInvalid")
+            : code === "password"
+              ? t("auth.errPassword")
+              : code === "name"
+                ? t("auth.errName")
+                : code === "exists"
+                  ? t("auth.errExists")
+                  : t("auth.errGeneric"),
       );
     } finally {
       setBusy(false);

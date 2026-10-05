@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useI18n } from "@/lib/i18n";
 import { getAuthRow } from "@/lib/db";
+import { authErrorCode } from "@/lib/validate";
 import { readSaSession, writeSaSession } from "@/lib/superadmin";
 import { uid } from "@/lib/store";
 import bcrypt from "bcryptjs";
@@ -53,7 +54,9 @@ export default function SuperAdminLogin() {
           ? t("sa.notSuperAdmin")
           : msg === "invalid"
             ? t("auth.invalid")
-            : t("auth.dbError"),
+            : authErrorCode(err) === "email"
+              ? t("auth.emailInvalid")
+              : t("auth.dbError"),
       );
     } finally {
       setBusy(false);

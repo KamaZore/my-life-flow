@@ -9,6 +9,7 @@ import { TurnstileWidget, turnstileEnabled } from "@/components/app/Turnstile";
 import { OfflineBanner } from "@/components/app/OfflineBanner";
 import { hasDb } from "@/lib/db";
 import { useI18n } from "@/lib/i18n";
+import { authErrorCode } from "@/lib/validate";
 
 function resolveRedirect(returnTo: string | null, fallback = "/select-system") {
   if (returnTo?.startsWith("/") && !returnTo.startsWith("//")) return returnTo;
@@ -54,10 +55,15 @@ function AuthInner() {
       await signIn(email, password, tsToken);
       // Auth state flip navigates via the effect above.
     } catch (err) {
+      // Typed codes from the validation layer: captcha / email problems get
+      // their own message; anything else is a credentials failure.
+      const code = authErrorCode(err);
       setError(
-        err instanceof Error && err.message === "captcha"
+        code === "captcha"
           ? t("auth.errCaptcha")
-          : t("auth.errInvalid"),
+          : code === "email"
+            ? t("auth.emailInvalid")
+            : t("auth.errInvalid"),
       );
     } finally {
       setBusy(false);

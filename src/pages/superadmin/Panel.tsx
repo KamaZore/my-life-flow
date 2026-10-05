@@ -37,6 +37,11 @@ import {
 } from "@/lib/modules";
 import { readSaSession, writeSaSession } from "@/lib/superadmin";
 import {
+  authErrorCode,
+  validateNewPassword,
+  PASSWORD_MIN,
+} from "@/lib/validate";
+import {
   defaultSiteContent,
   loadSiteContent,
   saveSiteContent,
@@ -322,9 +327,22 @@ export default function SuperAdminPanel() {
     }
   }
 
+  /** Map a thrown backend error to a translated toast message. */
+  function errMsg(err: unknown, fallback: string): string {
+    const code = authErrorCode(err);
+    if (code === "email") return t("auth.emailInvalid");
+    if (code === "password") return t("auth.errPassword");
+    if (code === "name") return t("auth.errName");
+    if (code === "exists") return t("auth.errExists");
+    return fallback;
+  }
+
   async function createAccount() {
     setNBusy(true);
     try {
+      // Same policy the register flow enforces — fails fast with a typed
+      // code instead of writing a weak/invalid account.
+      validateNewPassword(nPassword);
       const email = nEmail.trim().toLowerCase();
       const hash = await bcrypt.hash(nPassword, 10);
       await createUser(uid() + uid(), nName.trim(), email, hash, "user", nPerms);
@@ -335,8 +353,8 @@ export default function SuperAdminPanel() {
       setNPassword("");
       setNPerms({ ...DEFAULT_PERMS });
       await refresh();
-    } catch {
-      toast.error(t("sa.createFailed"));
+    } catch (err) {
+      toast.error(errMsg(err, t("sa.createFailed")));
     } finally {
       setNBusy(false);
     }
@@ -350,6 +368,7 @@ export default function SuperAdminPanel() {
       await setUserRole(editFor.id, editFor.role);
       await setUserPermissions(editFor.id, ePerms);
       if (newPassword) {
+        validateNewPassword(newPassword);
         const hash = await bcrypt.hash(newPassword, 10);
         await resetUserPassword(editFor.id, hash);
       }
@@ -357,18 +376,22 @@ export default function SuperAdminPanel() {
       setEditFor(null);
       setNewPassword("");
       await refresh();
-    } catch {
-      toast.error(t("sa.saveFailed"));
+    } catch (err) {
+      toast.error(errMsg(err, t("sa.saveFailed")));
     } finally {
       setEBusy(false);
     }
   }
 
   async function toggleRole(u: PanelUser) {
-    const next: UserRole = u.role === "superadmin" ? "user" : "superadmin";
-    await setUserRole(u.id, next);
-    await refresh();
-    toast.success(t("sa.saved"));
+    try {
+      const next: UserRole = u.role === "superadmin" ? "user" : "superadmin";
+      await setUserRole(u.id, next);
+      await refresh();
+      toast.success(t("sa.saved"));
+    } catch (err) {
+      toast.error(errMsg(err, t("sa.saveFailed")));
+    }
   }
 
   async function remove(u: PanelUser) {
@@ -377,8 +400,8 @@ export default function SuperAdminPanel() {
       await deleteUser(u.id);
       toast.success(t("sa.deleted"));
       await refresh();
-    } catch {
-      toast.error(t("sa.saveFailed"));
+    } catch (err) {
+      toast.error(errMsg(err, t("sa.saveFailed")));
     }
   }
 
@@ -733,7 +756,7 @@ export default function SuperAdminPanel() {
             </Button>
             <Button
               onClick={createAccount}
-              disabled={nBusy || !nName.trim() || !nEmail.trim() || nPassword.length < 6}
+              disabled={nBusy || !nName.trim() || !nEmail.trim() || nPassword.length < PASSWORD_MIN}
               className="gap-2 rounded-xl"
             >
               {nBusy && <Loader2 className="size-4 animate-spin" />}

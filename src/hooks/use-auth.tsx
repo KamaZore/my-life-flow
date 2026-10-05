@@ -23,6 +23,12 @@ import {
 } from "@/lib/store";
 import { verifyTurnstileToken } from "@/lib/turnstile-verify";
 import { effectivePerms } from "@/lib/superadmin";
+import {
+  normalizeEmail,
+  validateName,
+  validateNewPassword,
+  validateSignInPassword,
+} from "@/lib/validate";
 
 /**
  * Auth backend backed by the app's own Neon Postgres `users` table
@@ -118,7 +124,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // before any database call.
       const human = await verifyTurnstileToken(turnstileToken);
       if (!human) throw new Error("captcha");
-      const normalized = email.trim().toLowerCase();
+      // Input validation runs before any database call. Failures surface as
+      // a typed code the pages map to an i18n message (validate.ts).
+      const normalized = normalizeEmail(email);
+      validateSignInPassword(password);
       const row = await getAuthRow(normalized);
       if (!row) throw new Error("invalid");
       const ok = await bcrypt.compare(password, row.password_hash);
@@ -144,7 +153,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const human = await verifyTurnstileToken(turnstileToken);
         if (!human) throw new Error("captcha");
-        const normalized = email.trim().toLowerCase();
+        // Same validation the db layer enforces — fails fast with a typed
+        // code instead of a generic error after the hashing round-trip.
+        const normalized = normalizeEmail(email);
+        const cleanName = validateName(name);
+        validateNewPassword(password);
         const existing = await findUserByEmail(normalized);
         if (existing) throw new Error("exists");
         const hash = await bcrypt.hash(password, 10);
@@ -154,7 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const role = isFirst ? "superadmin" : "user";
         const created = await createUser(
           uid() + uid(),
-          name.trim(),
+          cleanName,
           normalized,
           hash,
           role,

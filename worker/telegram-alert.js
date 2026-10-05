@@ -20,17 +20,28 @@
 
 export default {
   async fetch(request, env) {
+    // The app calls this worker cross-origin from the browser, so every
+    // response needs CORS headers and preflights must be answered.
+    const cors = {
+      "Access-Control-Allow-Origin": env.ALLOWED_ORIGIN || "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Max-Age": "86400",
+    };
+    if (request.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: cors });
+    }
     if (request.method === "GET") {
-      return new Response("flowday telegram relay", { status: 200 });
+      return new Response("flowday telegram relay", { status: 200, headers: cors });
     }
     if (request.method !== "POST") {
-      return new Response("method not allowed", { status: 405 });
+      return new Response("method not allowed", { status: 405, headers: cors });
     }
 
     // Optional origin lock so strangers cannot burn your bot quota.
     const origin = request.headers.get("Origin");
     if (env.ALLOWED_ORIGIN && origin !== env.ALLOWED_ORIGIN) {
-      return new Response("forbidden", { status: 403 });
+      return new Response("forbidden", { status: 403, headers: cors });
     }
 
     let text = "";
@@ -44,7 +55,9 @@ export default {
     } catch {
       // fall through to the 400 below
     }
-    if (!text && !photo) return new Response("missing text or photo", { status: 400 });
+    if (!text && !photo) {
+      return new Response("missing text or photo", { status: 400, headers: cors });
+    }
 
     const payload = photo
       ? {
@@ -70,6 +83,7 @@ export default {
 
     return new Response(res.ok ? "ok" : "telegram error", {
       status: res.ok ? 200 : 502,
+      headers: cors,
     });
   },
 };

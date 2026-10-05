@@ -80,7 +80,13 @@ import {
   RATE_WINDOW_MS,
   type RateMap,
 } from "./rate-limit";
-import { buildDeviceLabel, formatFingerprint, formatGeo, looksLikeIp } from "./security";
+import {
+  buildDeviceLabel,
+  formatFingerprint,
+  formatGeo,
+  formatMapLink,
+  looksLikeIp,
+} from "./security";
 import { recordAuthEvent, AUTH_EVENT_TYPES, type AuthEventType } from "./db";
 import {
   ALERT_COOLDOWN_MS,
@@ -88,9 +94,19 @@ import {
   buildAlertCore,
   buildAlertDetails,
   buildAlertText,
+  buildErrorText,
   cooldownOk,
   identiconUrl,
 } from "./telegram";
+import {
+  ERROR_ALERT_COOLDOWN_MS,
+  errorFingerprint,
+  errorMessage,
+  overallHealth,
+  routeOf,
+  runHealthChecks,
+  type HealthDeps,
+} from "./monitor";
 
 /* ------------------------------------------------------------------ */
 /* parse.ts — smart capture                                            */
@@ -1091,5 +1107,141 @@ describe("telegram hack alerts", () => {
     expect(cooldownOk(last, "signin_fail", T + ALERT_COOLDOWN_MS - 1)).toBe(false);
     expect(cooldownOk(last, "signin_fail", T + ALERT_COOLDOWN_MS)).toBe(true);
     expect(cooldownOk(last, "sa_fail", T + 1_000)).toBe(true); // independent per type
+  });
+
+  test("attack caption carries the hacker's map link within the photo limit", () => {
+    const caption = buildAlertCore({
+      type: "signin_fail",
+      email: "a@b.c",
+      ip: "1.2.3.4",
+      geo: "Phnom Penh, Cambodia",
+      map: "https://www.google.com/maps?q=11.5564,104.9282",
+      at: 1_700_000_000_000,
+    });
+    expect(caption).toContain("Location: Phnom Penh, Cambodia");
+    expect(caption).toContain("Map: https://www.google.com/maps?q=11.5564,104.9282");
+    expect(caption.length).toBeLessThanOrEqual(1024);
+  });
+
+  test("website error alert text carries error, kind, page and time", () => {
+    const text = buildErrorText({
+      message: "Cannot read properties of null",
+      source: "rejection",
+      page: "https://x.test/#/life/today",
+      at: 1_700_000_000_000,
+    });
+    expect(text).toContain("WEBSITE ERROR");
+    expect(text).toContain("Cannot read properties of null");
+    expect(text).toContain("rejection");
+    expect(text).toContain("#/life/today");
+    expect(text.length).toBeLessThanOrEqual(4000);
+    // Telegram's hard cap holds even for a absurd message.
+    expect(buildErrorText({ message: "x".repeat(9000) }).length).toBeLessThanOrEqual(4000);
+  });
+});
+
+describe("monitoring (health probes + website error capture)", () => {
+  test("error fingerprint is deterministic, normalized and page-sensitive", () => {
+    const a = errorFingerprint("global", "Boom failed", "https://x.test/#/life/today");
+    const b = errorFingerprint("global", "Boom  failed", "https://x.test/#/life/today");
+    expect(a).toBe(b); // whitespace-normalized
+    expect(a.length).toBeLessThanOrEqual(64);
+    expect(a).toMatch(/^[0-9a-f]{8}(-[a-z0-9]+)*$/);
+    // Same bug on a different screen groups separately.
+    const c = errorFingerprint("global", "Boom failed", "https://x.test/#/life/tasks");
+    expect(c).not.toBe(b);
+    // Different source groups separately too.
+    expect(errorFingerprint("rejection", "Boom failed", "https://x.test/#/life/today")).not.toBe(b);
+    // Non-Latin messages fall back to the hash (no ASCII slug).
+    const kh = errorFingerprint("rejection", "កំហុសខ្មៅ", null);
+    expect(kh).toMatch(/^[0-9a-f]{8}$/);
+  });
+
+  test("routeOf strips the origin and keeps the hash route", () => {
+    expect(routeOf("https://kamazore.github.io/my-life-flow/#/life/tasks?q=1")).toBe(
+      "/my-life-flow/#/life/tasks?q=1",
+    );
+    expect(routeOf(null)).toBe("");
+    // Junk input is still parsed against the fallback base → a path, never a throw.
+    expect(routeOf("not a url")).toBe("/not%20a%20url");
+  });
+
+  test("errorMessage extracts messages and survives cycles", () => {
+    expect(errorMessage("  hi  ")).toBe("hi");
+    expect(errorMessage(new Error("boom"))).toBe("boom");
+    expect(errorMessage({ reason: { message: "wrapped" } })).toBe("wrapped");
+    const cyc: { reason?: unknown } = {};
+    cyc.reason = cyc;
+    expect(errorMessage(cyc)).toBe("Unknown error");
+    expect(errorMessage(undefined)).toBe("Unknown error");
+  });
+
+  test("overall health aggregates check results", () => {
+    expect(overallHealth([{ ok: true }, { ok: true }])).toBe("ok");
+    expect(overallHealth([{ ok: true }, { ok: false }])).toBe("degraded");
+    expect(overallHealth([{ ok: false }, { ok: false }])).toBe("down");
+    expect(overallHealth([])).toBe("ok");
+  });
+
+  test("runHealthChecks probes every dependency and reports per-service status", async () => {
+    const deps: HealthDeps = {
+      siteUrl: "https://x.test/",
+      ipEchoUrl: "https://ip.test/?format=json",
+      probeUrl: async (url) =>
+        url.includes("ip.test")
+          ? { ok: false, ms: 7, note: "http_503" }
+          : { ok: true, ms: 12, note: null },
+      pingDb: async () => ({ ok: true, ms: 30, note: null }),
+      telegramUrl: null,
+    };
+    const checks = await runHealthChecks(deps);
+    expect(checks.map((c) => c.id)).toEqual(["site", "database", "telegram", "ip"]);
+    expect(checks.find((c) => c.id === "site")?.ok).toBe(true);
+    expect(checks.find((c) => c.id === "database")?.ms).toBe(30);
+    // Unconfigured alert delivery is not an outage.
+    const tg = checks.find((c) => c.id === "telegram");
+    expect(tg?.ok).toBe(true);
+    expect(tg?.note).toBe("not_configured");
+    const ip = checks.find((c) => c.id === "ip");
+    expect(ip?.ok).toBe(false);
+    expect(ip?.note).toBe("http_503");
+    expect(overallHealth(checks)).toBe("degraded");
+
+    // A configured Telegram target is probed like any other URL.
+    const checks2 = await runHealthChecks({
+      ...deps,
+      telegramUrl: { kind: "direct", url: "https://api.test/botX/getMe" },
+    });
+    expect(checks2.find((c) => c.id === "telegram")?.note).toBeNull();
+  });
+
+  test("error alert cooldown runs per fingerprint with a custom window", () => {
+    const now = 1_000_000;
+    const last: Record<string, number> = {};
+    expect(cooldownOk(last, "err:abc", now, ERROR_ALERT_COOLDOWN_MS)).toBe(true);
+    last["err:abc"] = now;
+    expect(cooldownOk(last, "err:abc", now + 60_000, ERROR_ALERT_COOLDOWN_MS)).toBe(false);
+    expect(
+      cooldownOk(last, "err:abc", now + ERROR_ALERT_COOLDOWN_MS, ERROR_ALERT_COOLDOWN_MS),
+    ).toBe(true);
+    // A different fingerprint is unaffected.
+    expect(cooldownOk(last, "err:xyz", now + 1, ERROR_ALERT_COOLDOWN_MS)).toBe(true);
+  });
+});
+
+describe("hacker location map link", () => {
+  test("formatMapLink builds a Google Maps URL from coordinates", () => {
+    expect(formatMapLink(11.5564, 104.9282)).toBe(
+      "https://www.google.com/maps?q=11.5564,104.9282",
+    );
+    expect(formatMapLink(11.5564001, 104.9282009)).toBe(
+      "https://www.google.com/maps?q=11.5564,104.9282",
+    );
+    expect(formatMapLink(0, 0)).toBeNull(); // "no fix" default from the geo API
+    expect(formatMapLink(null, 104.9)).toBeNull();
+    expect(formatMapLink(91, 10)).toBeNull(); // out of range
+    expect(formatMapLink(10, 181)).toBeNull();
+    expect(formatMapLink(NaN, 10)).toBeNull();
+    expect(formatMapLink("11.5", 104.9)).toBeNull(); // strings are junk, not coords
   });
 });

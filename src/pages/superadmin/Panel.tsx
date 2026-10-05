@@ -16,6 +16,7 @@ import {
   deleteUser,
   getAppData,
   getAuthRow,
+  listAppErrors,
   listAuthEvents,
   listUsersPage,
   resetUserPassword,
@@ -24,6 +25,8 @@ import {
   updateUserProfile,
   createUser,
   DEFAULT_PERMS,
+  type AppError,
+  type AppErrorSource,
   type AuthEvent,
   type AuthEventType,
   type SystemPerms,
@@ -39,6 +42,13 @@ import {
   type AppModule,
 } from "@/lib/modules";
 import { readSaSession, refreshSaSession, saSessionNeedsRefresh, writeSaSession } from "@/lib/superadmin";
+import {
+  defaultHealthDeps,
+  overallHealth,
+  runHealthChecks,
+  type HealthCheck,
+  type HealthId,
+} from "@/lib/monitor";
 import {
   authErrorCode,
   validateNewPassword,
@@ -71,6 +81,9 @@ import {
   Activity,
   ExternalLink,
   Sparkles,
+  MapPin,
+  Radio,
+  Server,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
@@ -105,6 +118,34 @@ const SEC_TYPE: Record<AuthEventType, { key: string; cls: string }> = {
   sa_fail: { key: "sa.t.saFail", cls: "bg-red-500/15 text-red-600 dark:text-red-400" },
   sa_blocked: { key: "sa.t.saBlocked", cls: "bg-red-600/20 text-red-700 dark:text-red-400" },
 };
+
+/** Icon + i18n key per health check (monitoring tab). */
+const HEALTH_ICON: Record<HealthId, typeof Server> = {
+  site: Server,
+  database: Database,
+  telegram: Radio,
+  ip: MapPin,
+};
+const HEALTH_LABEL: Record<HealthId, string> = {
+  site: "sa.h.site",
+  database: "sa.h.db",
+  telegram: "sa.h.telegram",
+  ip: "sa.h.ip",
+};
+
+/** Badge style + i18n key per website error source. */
+const ERR_SRC: Record<AppErrorSource, { key: string; cls: string }> = {
+  global: { key: "sa.src.global", cls: "bg-amber-500/15 text-amber-600 dark:text-amber-400" },
+  rejection: { key: "sa.src.rejection", cls: "bg-red-500/15 text-red-600 dark:text-red-400" },
+  boundary: { key: "sa.src.boundary", cls: "bg-violet-500/15 text-violet-600 dark:text-violet-400" },
+};
+
+/** Localized probe note; falls back to the raw code (e.g. "http_503"). */
+function noteText(t: (key: string) => string, note: string): string {
+  const key = `sa.h.note.${note}`;
+  const s = t(key);
+  return s === key ? note.replace(/_/g, " ") : s;
+}
 
 function summarize(d: unknown): {
   life: number;
@@ -165,11 +206,17 @@ export default function SuperAdminPanel() {
   const [moduleAccent, setModuleAccent] = useState(ACCENTS[0]);
   const [siteDraft, setSiteDraft] = useState<SiteContent>(defaultSiteContent);
   const [siteBusy, setSiteBusy] = useState(false);
-  const [activeSection, setActiveSection] = useState<"users" | "site" | "modules" | "security">("users");
+  const [activeSection, setActiveSection] = useState<"users" | "site" | "modules" | "security" | "monitor">("users");
   // Security section: failed / blocked sign-in attempts (auth_events table).
   const [secEvents, setSecEvents] = useState<AuthEvent[]>([]);
   const [secBusy, setSecBusy] = useState(false);
   const [secNonce, setSecNonce] = useState(0);
+  // Monitoring section: service health probes + website error log.
+  const [monChecks, setMonChecks] = useState<HealthCheck[] | null>(null);
+  const [monBusy, setMonBusy] = useState(false);
+  const [monNonce, setMonNonce] = useState(0);
+  const [appErrs, setAppErrs] = useState<AppError[]>([]);
+  const [errBusy, setErrBusy] = useState(false);
 
   const visibleUsers = users.length;
   const visibleAdmins = users.filter((u) => u.role === "superadmin").length;
@@ -210,6 +257,48 @@ export default function SuperAdminPanel() {
       cancelled = true;
     };
   }, [activeSection, secNonce]);
+
+  // Monitoring: probe service health + load the error log when the tab opens
+  // (health re-probes every 60s while the tab is visible).
+  useEffect(() => {
+    if (activeSection !== "monitor") return;
+    let cancelled = false;
+    setMonBusy(true);
+    setErrBusy(true);
+    runHealthChecks(defaultHealthDeps())
+      .then((checks) => {
+        if (!cancelled) setMonChecks(checks);
+      })
+      .catch(() => {
+        if (!cancelled) setMonChecks(null);
+      })
+      .finally(() => {
+        if (!cancelled) setMonBusy(false);
+      });
+    listAppErrors(100)
+      .then((errors) => {
+        if (!cancelled) setAppErrs(errors);
+      })
+      .catch(() => {
+        if (!cancelled) setAppErrs([]);
+      })
+      .finally(() => {
+        if (!cancelled) setErrBusy(false);
+      });
+    const timer = window.setInterval(() => {
+      runHealthChecks(defaultHealthDeps())
+        .then((checks) => {
+          if (!cancelled) setMonChecks(checks);
+        })
+        .catch(() => {
+          // Keep the last result — a failed refresh is not a outage signal.
+        });
+    }, 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [activeSection, monNonce]);
 
   const refresh = useCallback(async (requestedPage = page) => {
     setLoading(true);
@@ -491,6 +580,7 @@ export default function SuperAdminPanel() {
             ["site", t("sa.menuSiteContent"), Sparkles],
             ["modules", t("sa.menuModules"), Blocks],
             ["security", t("sa.menuSecurity"), ShieldAlert],
+            ["monitor", t("sa.menuMonitor"), Activity],
           ] as const).map(([id, label, Icon]) => (
             <Button
               key={id}
@@ -788,6 +878,97 @@ export default function SuperAdminPanel() {
                   <p className="min-w-0 flex-1 truncate text-xs font-medium">{e.email ?? "—"}</p>
                   <p className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{e.ip ?? "—"}</p>
                   <p className="max-w-[45%] truncate text-[10px] text-muted-foreground" title={e.details ?? e.device ?? undefined}>{e.device ?? "—"}</p>
+                  <p className="text-[10px] tabular-nums text-muted-foreground">{formatStamp(e.at)}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        )}
+
+        {activeSection === "monitor" && (
+        <div className="space-y-4">
+          <section className="rounded-2xl border border-sky-500/20 bg-sky-500/[.04] p-4">
+            <div className="flex items-start gap-3">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600"><Activity className="size-4" /></span>
+              <div className="min-w-0">
+                <h2 className="text-sm font-bold">{t("sa.monTitle")}</h2>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">{t("sa.monSub")}</p>
+              </div>
+            </div>
+          </section>
+
+          <div className="flex items-center justify-between gap-2">
+            {monChecks ? (
+              (() => {
+                const overall = overallHealth(monChecks);
+                const cls = overall === "ok"
+                  ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                  : overall === "degraded"
+                    ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                    : "bg-red-500/15 text-red-600 dark:text-red-400";
+                const label = overall === "ok" ? t("sa.h.ok") : overall === "degraded" ? t("sa.h.degraded") : t("sa.h.down");
+                return <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${cls}`}>{label}</span>;
+              })()
+            ) : (
+              <span className="text-xs text-muted-foreground">{monBusy ? t("sa.h.checking") : ""}</span>
+            )}
+            <Button variant="outline" size="sm" onClick={() => setMonNonce((n) => n + 1)} disabled={monBusy} className="gap-1.5 rounded-lg">
+              <RefreshCw className={"size-3.5" + (monBusy ? " animate-spin" : "")} />
+              {t("common.refresh")}
+            </Button>
+          </div>
+
+          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {(monChecks ?? []).map((c) => {
+              const Icon = HEALTH_ICON[c.id];
+              return (
+                <div key={c.id} className="card-soft rounded-2xl border border-border/60 bg-card p-4">
+                  <div className="flex items-center justify-between">
+                    <span className={`flex size-7 items-center justify-center rounded-lg ${c.ok ? "bg-emerald-500/10 text-emerald-600" : "bg-red-500/10 text-red-600"}`}>
+                      <Icon className="size-3.5" />
+                    </span>
+                    <span className={`size-2 rounded-full ${c.ok ? "bg-emerald-500" : "bg-red-500"}`} aria-label={c.ok ? t("sa.h.ok") : t("sa.h.down")} />
+                  </div>
+                  <p className="mt-2 truncate text-xs font-semibold">{t(HEALTH_LABEL[c.id])}</p>
+                  <p className="mt-1 flex items-center gap-2 text-[11px] tabular-nums text-muted-foreground">
+                    <span className="shrink-0">{c.ms} ms</span>
+                    {c.note && <span className="truncate" title={c.note}>{noteText(t, c.note)}</span>}
+                  </p>
+                </div>
+              );
+            })}
+            {monBusy && !monChecks && (
+              <div className="col-span-full"><IosSpinner label={t("sa.h.checking")} className="py-6" /></div>
+            )}
+          </section>
+
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold">{t("sa.errTitle")}</h3>
+            {appErrs.length > 0 && (
+              <span className="text-xs tabular-nums text-muted-foreground">{appErrs.length}</span>
+            )}
+          </div>
+
+          {errBusy && <IosSpinner label={t("sa.loading")} className="py-6" />}
+
+          {!errBusy && appErrs.length === 0 && (
+            <div className="rounded-2xl border border-dashed border-border/70 p-10 text-center">
+              <Activity className="mx-auto mb-2 size-8 text-muted-foreground/50" />
+              <p className="text-sm text-muted-foreground">{t("sa.errEmpty")}</p>
+            </div>
+          )}
+
+          {!errBusy && appErrs.length > 0 && (
+            <div className="space-y-2">
+              {appErrs.map((e) => (
+                <div key={e.id} className="card-soft flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-border/60 bg-card px-4 py-3">
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${ERR_SRC[e.source]?.cls ?? "bg-muted text-muted-foreground"}`}>
+                    {t(ERR_SRC[e.source]?.key ?? "sa.src.global")}
+                  </span>
+                  <p className="min-w-0 flex-1 truncate text-xs font-medium" title={e.message}>{e.message}</p>
+                  <p className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-muted-foreground">×{e.hits}</p>
+                  <p className="max-w-[45%] truncate text-[10px] text-muted-foreground" title={e.page ?? undefined}>{e.page ?? "—"}</p>
                   <p className="text-[10px] tabular-nums text-muted-foreground">{formatStamp(e.at)}</p>
                 </div>
               ))}

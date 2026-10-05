@@ -14,6 +14,7 @@ import {
 } from "react-router";
 import { I18nProvider } from "@/lib/i18n";
 import { initOnlineSync, switchUser } from "@/lib/store";
+import { installErrorCapture, reportAppError } from "@/lib/monitor";
 import { useAuth } from "@/hooks/use-auth";
 import "./index.css";
 
@@ -98,6 +99,10 @@ class RootErrorBoundary extends React.Component<
       stack: error.stack || "",
     };
   }
+  componentDidCatch(error: Error) {
+    // Feed the monitoring log / owner alert (fire-and-forget).
+    reportAppError("boundary", error);
+  }
   render() {
     if (this.state.hasError) {
       return (
@@ -166,6 +171,7 @@ class ChunkErrorBoundary extends React.Component<
     return { hasError: true };
   }
   componentDidCatch(error: Error) {
+    reportAppError("boundary", error);
     const msg = String(error?.message ?? "");
     const isChunkError =
       msg.includes("dynamically imported module") ||
@@ -451,6 +457,16 @@ function Root() {
 }
 
 /**
+ * Captures uncaught JS errors + unhandled rejections for the monitoring log
+ * and owner-facing Telegram alert (see lib/monitor.ts). StrictMode-safe:
+ * the effect returns the listener cleanup.
+ */
+function ErrorMonitor() {
+  useEffect(() => installErrorCapture(), []);
+  return null;
+}
+
+/**
  * Hash router: GitHub Pages serves static files with no server-side routing,
  * so /today lives at /#/today. Works identically in local dev.
  */
@@ -460,6 +476,7 @@ const router = createHashRouter([
     element: (
       <ReloadOnNewChunk>
         <ServiceWorkerRegistrar />
+        <ErrorMonitor />
         <UserStoreBridge />
         <InstallPrompt />
         <AppRoutes />

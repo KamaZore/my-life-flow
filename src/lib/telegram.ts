@@ -36,6 +36,8 @@ export type AlertEvent = {
   ip?: string | null;
   device?: string | null;
   geo?: string | null;
+  /** Clickable map link for the attacker's approximate location. */
+  map?: string | null;
   details?: string | null;
 };
 
@@ -91,6 +93,7 @@ export function buildAlertText(event: AlertEvent & {
     `IP: ${event.ip || "—"}`,
   ];
   if (event.geo) lines.push(`Location: ${event.geo}`);
+  if (event.map) lines.push(`Map: ${event.map}`);
   if (event.ip) lines.push(`Trace: https://ipinfo.io/${event.ip}`);
   if (event.device) lines.push(`Device: ${event.device}`);
   if (event.details) lines.push(event.details);
@@ -112,6 +115,7 @@ export function buildAlertCore(event: AlertEvent & { at?: number }): string {
     `IP: ${event.ip || "—"}`,
   ];
   if (event.geo) lines.push(`Location: ${event.geo}`);
+  if (event.map) lines.push(`Map: ${event.map}`);
   if (event.ip) lines.push(`Trace: https://ipinfo.io/${event.ip}`);
   if (event.device) lines.push(`Device: ${event.device}`);
   lines.push(`Time: ${new Date(event.at ?? Date.now()).toLocaleString()}`);
@@ -128,8 +132,9 @@ export function cooldownOk(
   lastByType: Record<string, number>,
   type: string,
   now: number,
+  windowMs: number = ALERT_COOLDOWN_MS,
 ): boolean {
-  return now - (lastByType[type] ?? 0) >= ALERT_COOLDOWN_MS;
+  return now - (lastByType[type] ?? 0) >= windowMs;
 }
 
 /** Module-level cooldown state (per session). */
@@ -187,4 +192,41 @@ export function sendSecurityAlert(event: AlertEvent): void {
       // Offline, timeout, or endpoint blocked — drop the alert.
     }
   })();
+}
+
+/**
+ * Website (JavaScript) error alert — owner-facing English, plain text so
+ * attacker- or framework-controlled strings can never break parsing. Pure.
+ */
+export function buildErrorText(input: {
+  message: string;
+  source?: string | null;
+  page?: string | null;
+  at?: number;
+}): string {
+  const lines = [
+    "⚠️ WEBSITE ERROR — Flowday",
+    `Error: ${input.message || "Unknown error"}`,
+  ];
+  if (input.source) lines.push(`Kind: ${input.source}`);
+  if (input.page) lines.push(`Page: ${input.page}`);
+  lines.push(`Time: ${new Date(input.at ?? Date.now()).toLocaleString()}`);
+  return lines.join("\n").slice(0, MAX_TEXT);
+}
+
+/**
+ * Fire-and-forget error ping. Cooldown/dedup lives in lib/monitor.ts (per
+ * error fingerprint); delivery is best-effort like the attack alerts.
+ */
+export function sendErrorAlert(input: {
+  message: string;
+  source?: string | null;
+  page?: string | null;
+}): void {
+  if (!telegramAlertEnabled()) return;
+  void postTelegram("sendMessage", {
+    text: buildErrorText({ ...input, at: Date.now() }),
+  }).catch(() => {
+    // Offline, timeout, or endpoint blocked — drop the alert.
+  });
 }

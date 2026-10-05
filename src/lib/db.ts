@@ -105,6 +105,21 @@ export function ensureSchema(): Promise<void> {
       await s`CREATE INDEX IF NOT EXISTS auth_events_at_ms_idx ON auth_events (at_ms DESC)`;
       // Rich payload: geo line + device fingerprint + full user agent.
       await s`ALTER TABLE auth_events ADD COLUMN IF NOT EXISTS details TEXT`;
+      // Website error log: uncaught JS errors + unhandled rejections.
+      await s`
+        CREATE TABLE IF NOT EXISTS app_errors (
+          id         TEXT PRIMARY KEY,
+          fp         TEXT NOT NULL,
+          message    TEXT NOT NULL,
+          source     TEXT NOT NULL,
+          page       TEXT,
+          hits       INT NOT NULL DEFAULT 1,
+          at_ms      BIGINT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `;
+      await s`CREATE INDEX IF NOT EXISTS app_errors_at_ms_idx ON app_errors (at_ms DESC)`;
+      await s`CREATE INDEX IF NOT EXISTS app_errors_fp_idx ON app_errors (fp)`;
     })().catch((err) => {
       schemaPromise = null; // allow retry (e.g. transient offline)
       throw err;
@@ -502,4 +517,126 @@ export async function listAuthEvents(limit = 100): Promise<AuthEvent[]> {
     details: r.details ?? null,
     at: Number(r.at_ms),
   }));
+}
+
+/* ------------------------------------------------------------------ */
+/* Website error log — uncaught JS errors + unhandled rejections       */
+/* ------------------------------------------------------------------ */
+
+export const APP_ERROR_SOURCES = [
+  "global",
+  "rejection",
+  "boundary",
+] as const;
+export type AppErrorSource = (typeof APP_ERROR_SOURCES)[number];
+
+export type AppError = {
+  id: string;
+  /** Grouping key — same fingerprint increments `hits` instead of a new row. */
+  fp: string;
+  message: string;
+  source: AppErrorSource;
+  page: string | null;
+  hits: number;
+  at: number; // epoch ms
+};
+
+/** Newest errors kept in the table — bounds storage under spam. */
+export const APP_ERROR_MAX = 1000;
+/** Rows older than this are dropped on read/write. */
+export const APP_ERROR_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+/** Repeats of one fingerprint within this window bump `hits`, not a new row. */
+export const APP_ERROR_DEDUPE_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Record a website (client-side) error. Best-effort by design: callers
+ * fire-and-forget so monitoring can never break the page it observes; the
+ * table is capped at APP_ERROR_MAX rows so an error loop cannot flood it.
+ */
+export async function recordAppError(input: {
+  fp: string;
+  message: string;
+  source: AppErrorSource;
+  page?: string | null;
+}): Promise<void> {
+  if (!APP_ERROR_SOURCES.includes(input.source)) {
+    throw new ValidationError("data", "source", "Unknown error source");
+  }
+  const fp = safeText(input.fp, 64);
+  const message = safeText(input.message, 300);
+  if (!fp || !message) return; // nothing usable — drop
+  const page = safeText(input.page, 200);
+  const at = Date.now();
+  await ensureSchema();
+  // Same error recently seen → bump its counter instead of a new row.
+  const bumped = await getSql()`
+    UPDATE app_errors SET hits = hits + 1, at_ms = ${at}
+    WHERE fp = ${fp} AND at_ms > ${at - APP_ERROR_DEDUPE_MS}
+    RETURNING id
+  `;
+  if ((bumped as unknown as { id: string }[]).length > 0) return;
+  const id = eventId();
+  await getSql()`
+    INSERT INTO app_errors (id, fp, message, source, page, hits, at_ms)
+    VALUES (${id}, ${fp}, ${message}, ${input.source}, ${page}, 1, ${at})
+  `;
+  // Cap the table right after writing (one extra statement — errors are rare).
+  await getSql()`
+    DELETE FROM app_errors WHERE id NOT IN (
+      SELECT id FROM app_errors ORDER BY at_ms DESC, id DESC LIMIT ${APP_ERROR_MAX}
+    )
+  `;
+}
+
+/** Newest website errors for the superadmin panel (time-pruned on read). */
+export async function listAppErrors(limit = 100): Promise<AppError[]> {
+  const n = Math.min(300, Math.max(1, Math.floor(limit)));
+  await ensureSchema();
+  const cutoff = Date.now() - APP_ERROR_TTL_MS;
+  await getSql()`DELETE FROM app_errors WHERE at_ms < ${cutoff}`;
+  const rows = await getSql()`
+    SELECT id, fp, message, source, page, hits, at_ms
+    FROM app_errors ORDER BY at_ms DESC, id DESC LIMIT ${n}
+  `;
+  return (rows as {
+    id: string;
+    fp: string;
+    message: string;
+    source: string;
+    page: string | null;
+    hits: string | number;
+    at_ms: string | number;
+  }[]).map((r) => ({
+    id: r.id,
+    fp: r.fp,
+    message: r.message,
+    source: (APP_ERROR_SOURCES.includes(r.source as AppErrorSource)
+      ? r.source
+      : "global") as AppErrorSource,
+    page: r.page ?? null,
+    hits: Number(r.hits) || 1,
+    at: Number(r.at_ms),
+  }));
+}
+
+/* ------------------------------------------------------------------ */
+/* Health probe — round-trip latency for the database                  */
+/* ------------------------------------------------------------------ */
+
+export type ProbeResult = { ok: boolean; ms: number; note: string | null };
+
+/**
+ * One lightweight query against Neon — used by the Monitoring tab to prove
+ * the database is reachable and measure round-trip latency. Never throws:
+ * failures are reported as { ok: false, note } so the health UI can render.
+ */
+export async function pingDatabase(): Promise<ProbeResult> {
+  const t0 = Date.now();
+  if (!hasDb) return { ok: false, ms: 0, note: "no_db_url" };
+  try {
+    await getSql()`SELECT 1`;
+    return { ok: true, ms: Date.now() - t0, note: null };
+  } catch {
+    return { ok: false, ms: Date.now() - t0, note: "failed" };
+  }
 }

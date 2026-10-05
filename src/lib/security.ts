@@ -13,7 +13,8 @@ import { sendSecurityAlert } from "./telegram";
  */
 
 /** Keyless, CORS-enabled JSON IP echo; cached so we call it rarely. */
-const IP_ENDPOINT = "https://api.ipify.org?format=json";
+export const IP_ECHO_URL = "https://api.ipify.org?format=json";
+const IP_ENDPOINT = IP_ECHO_URL;
 const IP_CACHE_KEY = "flowday-ip-v1";
 const IP_TTL_MS = 24 * 60 * 60 * 1000;
 const IP_TIMEOUT_MS = 3000;
@@ -134,8 +135,29 @@ export function formatGeo(city: unknown, country: unknown, isp: unknown): string
   return out || null;
 }
 
+/**
+ * Clickable map URL for coordinates (pure — unit tested). Returns null for
+ * missing / out-of-range / (0,0) values — (0,0) is the common "no fix".
+ */
+export function formatMapLink(lat: unknown, lon: unknown): string | null {
+  const num = (v: unknown, max: number) =>
+    typeof v === "number" && Number.isFinite(v) && Math.abs(v) <= max ? v : null;
+  const la = num(lat, 90);
+  const lo = num(lon, 180);
+  if (la === null || lo === null) return null;
+  if (la === 0 && lo === 0) return null;
+  return `https://www.google.com/maps?q=${la.toFixed(4)},${lo.toFixed(4)}`;
+}
+
+export type GeoInfo = {
+  /** "City, Country · ISP" line for the alert / stored details. */
+  line: string;
+  /** Clickable map link when coordinates were resolved, else null. */
+  map: string | null;
+};
+
 /** Best-effort location for an IP — null when offline/unknown. */
-export async function getIpGeo(ip: string): Promise<string | null> {
+export async function getIpGeo(ip: string): Promise<GeoInfo | null> {
   if (!looksLikeIp(ip)) return null;
   try {
     const controller = new AbortController();
@@ -149,10 +171,15 @@ export async function getIpGeo(ip: string): Promise<string | null> {
       success?: boolean;
       city?: unknown;
       country?: unknown;
+      latitude?: unknown;
+      longitude?: unknown;
       connection?: { isp?: unknown };
     };
     if (data.success === false) return null;
-    return formatGeo(data.city, data.country, data.connection?.isp);
+    const line = formatGeo(data.city, data.country, data.connection?.isp);
+    const map = formatMapLink(data.latitude, data.longitude);
+    if (!line && !map) return null;
+    return { line: line ?? "", map };
   } catch {
     return null; // enrichment is optional — the alert still sends without it
   }
@@ -250,7 +277,9 @@ export function trackSecurityEvent(type: AuthEventType, email?: string | null): 
   void (async () => {
     try {
       const ip = await getClientIp();
-      const geo = ip ? await getIpGeo(ip) : null;
+      const geoInfo = ip ? await getIpGeo(ip) : null;
+      const geo = geoInfo?.line || null;
+      const map = geoInfo?.map ?? null;
       const hasWindow = typeof window !== "undefined";
       const device = buildDeviceLabel({
         userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "",
@@ -272,10 +301,14 @@ export function trackSecurityEvent(type: AuthEventType, email?: string | null): 
         email,
         ip,
         device,
-        details: formatFingerprint([geo ? `Location: ${geo}` : "", detailBlock]),
+        details: formatFingerprint([
+          geo ? `Location: ${geo}` : "",
+          map ? `Map: ${map}` : "",
+          detailBlock,
+        ]),
       });
       // Real-time ping to the owner's Telegram (no-op when unconfigured).
-      sendSecurityAlert({ type, email, ip, device, geo, details: detailBlock });
+      sendSecurityAlert({ type, email, ip, device, geo, map, details: detailBlock });
     } catch {
       // Telemetry is best-effort — never surface it to the user.
     }

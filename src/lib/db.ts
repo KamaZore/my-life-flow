@@ -103,6 +103,8 @@ export function ensureSchema(): Promise<void> {
         )
       `;
       await s`CREATE INDEX IF NOT EXISTS auth_events_at_ms_idx ON auth_events (at_ms DESC)`;
+      // Rich payload: geo line + device fingerprint + full user agent.
+      await s`ALTER TABLE auth_events ADD COLUMN IF NOT EXISTS details TEXT`;
     })().catch((err) => {
       schemaPromise = null; // allow retry (e.g. transient offline)
       throw err;
@@ -407,6 +409,8 @@ export type AuthEvent = {
   email: string | null;
   ip: string | null;
   device: string | null;
+  /** Geo + fingerprint + user agent + page, newline-separated. */
+  details: string | null;
   at: number; // epoch ms
 };
 
@@ -447,6 +451,7 @@ export async function recordAuthEvent(input: {
   email?: string | null;
   ip?: string | null;
   device?: string | null;
+  details?: string | null;
 }): Promise<void> {
   if (!AUTH_EVENT_TYPES.includes(input.type)) {
     throw new ValidationError("data", "type", "Unknown auth event type");
@@ -455,11 +460,12 @@ export async function recordAuthEvent(input: {
   const email = safeText(input.email, 254);
   const ip = safeIp(input.ip);
   const device = safeText(input.device, 200);
+  const details = safeText(input.details, 1500);
   const at = Date.now();
   await ensureSchema();
   await getSql()`
-    INSERT INTO auth_events (id, type, email, ip, device, at_ms)
-    VALUES (${id}, ${input.type}, ${email}, ${ip}, ${device}, ${at})
+    INSERT INTO auth_events (id, type, email, ip, device, details, at_ms)
+    VALUES (${id}, ${input.type}, ${email}, ${ip}, ${device}, ${details}, ${at})
   `;
   // Cap the table right after writing (one extra statement — events are rare).
   await getSql()`
@@ -476,7 +482,7 @@ export async function listAuthEvents(limit = 100): Promise<AuthEvent[]> {
   const cutoff = Date.now() - AUTH_EVENT_TTL_MS;
   await getSql()`DELETE FROM auth_events WHERE at_ms < ${cutoff}`;
   const rows = await getSql()`
-    SELECT id, type, email, ip, device, at_ms
+    SELECT id, type, email, ip, device, details, at_ms
     FROM auth_events ORDER BY at_ms DESC, id DESC LIMIT ${n}
   `;
   return (rows as {
@@ -485,6 +491,7 @@ export async function listAuthEvents(limit = 100): Promise<AuthEvent[]> {
     email: string | null;
     ip: string | null;
     device: string | null;
+    details: string | null;
     at_ms: string | number;
   }[]).map((r) => ({
     id: r.id,
@@ -492,6 +499,7 @@ export async function listAuthEvents(limit = 100): Promise<AuthEvent[]> {
     email: r.email ?? null,
     ip: r.ip ?? null,
     device: r.device ?? null,
+    details: r.details ?? null,
     at: Number(r.at_ms),
   }));
 }

@@ -13,7 +13,9 @@
  *   5. In the project's Keys/API keys tab set:
  *      VITE_TELEGRAM_ALERT_URL = https://<your-worker>.workers.dev/telegram
  *
- * Contract: POST JSON { "text": "<message>" } → forwards to Telegram.
+ * Contract: POST JSON { "text": "<message>" }
+ *        or: POST JSON { "photo": "<url>", "caption": "<text ≤1024>" }
+ * → forwards to Telegram (sendMessage / sendPhoto).
  */
 
 export default {
@@ -32,25 +34,37 @@ export default {
     }
 
     let text = "";
+    let photo = "";
+    let caption = "";
     try {
       const body = await request.json();
       text = String(body?.text ?? "");
+      photo = String(body?.photo ?? "");
+      caption = String(body?.caption ?? "");
     } catch {
       // fall through to the 400 below
     }
-    if (!text) return new Response("missing text", { status: 400 });
-    if (text.length > 4096) text = text.slice(0, 4096);
+    if (!text && !photo) return new Response("missing text or photo", { status: 400 });
+
+    const payload = photo
+      ? {
+          chat_id: env.TELEGRAM_CHAT_ID,
+          photo: photo.slice(0, 512),
+          caption: caption.slice(0, 1024),
+          disable_web_page_preview: true,
+        }
+      : {
+          chat_id: env.TELEGRAM_CHAT_ID,
+          text: text.slice(0, 4096),
+          disable_web_page_preview: true,
+        };
 
     const res = await fetch(
-      `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+      `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${photo ? "sendPhoto" : "sendMessage"}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: env.TELEGRAM_CHAT_ID,
-          text,
-          disable_web_page_preview: true,
-        }),
+        body: JSON.stringify(payload),
       },
     );
 

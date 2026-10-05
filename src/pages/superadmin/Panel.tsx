@@ -787,7 +787,7 @@ export default function SuperAdminPanel() {
                   </span>
                   <p className="min-w-0 flex-1 truncate text-xs font-medium">{e.email ?? "—"}</p>
                   <p className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{e.ip ?? "—"}</p>
-                  <p className="max-w-[45%] truncate text-[10px] text-muted-foreground" title={e.device ?? undefined}>{e.device ?? "—"}</p>
+                  <p className="max-w-[45%] truncate text-[10px] text-muted-foreground" title={e.details ?? e.device ?? undefined}>{e.device ?? "—"}</p>
                   <p className="text-[10px] tabular-nums text-muted-foreground">{formatStamp(e.at)}</p>
                 </div>
               ))}

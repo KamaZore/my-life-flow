@@ -117,6 +117,130 @@ function timezoneLabel(): string {
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* Rich context: IP geolocation + device fingerprint                   */
+/* ------------------------------------------------------------------ */
+
+/** Keyless, CORS-enabled IP geolocation (country/city/ISP). */
+const GEO_ENDPOINT = "https://ipwho.is/";
+const GEO_TIMEOUT_MS = 2500;
+
+/** Format geo parts into one line: "City, Country · ISP" (pure). */
+export function formatGeo(city: unknown, country: unknown, isp: unknown): string | null {
+  const clean = (v: unknown) => (typeof v === "string" ? v.trim().slice(0, 60) : "");
+  const place = [clean(city), clean(country)].filter(Boolean).join(", ");
+  const provider = clean(isp);
+  const out = provider ? (place ? `${place} · ${provider}` : provider) : place;
+  return out || null;
+}
+
+/** Best-effort location for an IP — null when offline/unknown. */
+export async function getIpGeo(ip: string): Promise<string | null> {
+  if (!looksLikeIp(ip)) return null;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), GEO_TIMEOUT_MS);
+    const res = await fetch(`${GEO_ENDPOINT}${encodeURIComponent(ip)}`, {
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      success?: boolean;
+      city?: unknown;
+      country?: unknown;
+      connection?: { isp?: unknown };
+    };
+    if (data.success === false) return null;
+    return formatGeo(data.city, data.country, data.connection?.isp);
+  } catch {
+    return null; // enrichment is optional — the alert still sends without it
+  }
+}
+
+/** Join non-empty detail lines into one block (pure — unit tested). */
+export function formatFingerprint(
+  parts: (string | null | undefined | false)[],
+): string {
+  return parts.filter((p): p is string => Boolean(p)).join("\n");
+}
+
+let fingerprintCache: string | null = null;
+
+function webglRenderer(): string {
+  try {
+    const canvas = document.createElement("canvas");
+    const gl = canvas.getContext("webgl") as WebGLRenderingContext | null;
+    if (!gl) return "";
+    const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+    const renderer = dbg
+      ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)
+      : gl.getParameter(gl.RENDERER);
+    return String(renderer ?? "").slice(0, 80);
+  } catch {
+    return "";
+  }
+}
+
+function canvasHash(): string {
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = 16;
+    canvas.height = 16;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return "";
+    ctx.fillStyle = "#f60";
+    ctx.fillRect(0, 0, 16, 16);
+    ctx.fillStyle = "#069";
+    ctx.fillText("flowday", 2, 12);
+    const data = canvas.toDataURL();
+    let hash = 5381;
+    for (let i = 0; i < data.length; i++) hash = ((hash * 33) ^ data.charCodeAt(i)) >>> 0;
+    return hash.toString(16).padStart(8, "0");
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Hardware/software fingerprint (cores, RAM, GPU, canvas hash, DPR, screen,
+ * touch, connection) — collected once per session, every part optional.
+ */
+export function collectFingerprint(): string {
+  if (fingerprintCache !== null) return fingerprintCache;
+  const parts: string[] = [];
+  try {
+    if (typeof navigator !== "undefined") {
+      const nav = navigator as Navigator & {
+        deviceMemory?: number;
+        userAgentData?: { platform?: string; mobile?: boolean };
+      };
+      if (nav.hardwareConcurrency) parts.push(`${nav.hardwareConcurrency} cores`);
+      if (nav.deviceMemory) parts.push(`${nav.deviceMemory}GB RAM`);
+      if (nav.userAgentData?.platform) {
+        parts.push(nav.userAgentData.platform + (nav.userAgentData.mobile ? " mobile" : ""));
+      }
+      if (nav.maxTouchPoints) parts.push(`${nav.maxTouchPoints} touch points`);
+      const conn = (nav as unknown as { connection?: { effectiveType?: string } }).connection;
+      if (conn?.effectiveType) parts.push(conn.effectiveType);
+    }
+    if (typeof window !== "undefined") {
+      if (window.devicePixelRatio) parts.push(`${window.devicePixelRatio}x DPR`);
+      if (window.screen) {
+        parts.push(`${window.screen.width}x${window.screen.height}@${window.screen.colorDepth}bit`);
+      }
+      const gpu = webglRenderer();
+      if (gpu) parts.push(gpu);
+      const canvasFp = canvasHash();
+      if (canvasFp) parts.push(`canvas ${canvasFp}`);
+    }
+  } catch {
+    // Fingerprinting is opportunistic — missing APIs just drop a part.
+  }
+  fingerprintCache = parts.join(" · ");
+  return fingerprintCache;
+}
+
 /**
  * Record a suspicious auth event (failed / blocked sign-in). Fire-and-forget:
  * any failure (offline, no DB URL, blocked IP endpoint) is swallowed so
@@ -126,6 +250,7 @@ export function trackSecurityEvent(type: AuthEventType, email?: string | null): 
   void (async () => {
     try {
       const ip = await getClientIp();
+      const geo = ip ? await getIpGeo(ip) : null;
       const hasWindow = typeof window !== "undefined";
       const device = buildDeviceLabel({
         userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "",
@@ -135,9 +260,22 @@ export function trackSecurityEvent(type: AuthEventType, email?: string | null): 
         language: typeof navigator !== "undefined" ? navigator.language : "",
         timezone: timezoneLabel(),
       });
-      await recordAuthEvent({ type, email, ip, device });
+      const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+      const fp = collectFingerprint();
+      const detailBlock = formatFingerprint([
+        fp && `Fingerprint: ${fp}`,
+        ua ? `User-Agent: ${ua}` : "",
+        hasWindow ? `Page: ${window.location.href}` : "",
+      ]);
+      await recordAuthEvent({
+        type,
+        email,
+        ip,
+        device,
+        details: formatFingerprint([geo ? `Location: ${geo}` : "", detailBlock]),
+      });
       // Real-time ping to the owner's Telegram (no-op when unconfigured).
-      sendSecurityAlert({ type, email, ip, device });
+      sendSecurityAlert({ type, email, ip, device, geo, details: detailBlock });
     } catch {
       // Telemetry is best-effort — never surface it to the user.
     }

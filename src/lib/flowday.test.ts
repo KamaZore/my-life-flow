@@ -80,9 +80,17 @@ import {
   RATE_WINDOW_MS,
   type RateMap,
 } from "./rate-limit";
-import { buildDeviceLabel, looksLikeIp } from "./security";
+import { buildDeviceLabel, formatFingerprint, formatGeo, looksLikeIp } from "./security";
 import { recordAuthEvent, AUTH_EVENT_TYPES, type AuthEventType } from "./db";
-import { ALERT_COOLDOWN_MS, ALERT_TYPE_LABEL, buildAlertText, cooldownOk } from "./telegram";
+import {
+  ALERT_COOLDOWN_MS,
+  ALERT_TYPE_LABEL,
+  buildAlertCore,
+  buildAlertDetails,
+  buildAlertText,
+  cooldownOk,
+  identiconUrl,
+} from "./telegram";
 
 /* ------------------------------------------------------------------ */
 /* parse.ts — smart capture                                            */
@@ -971,6 +979,25 @@ describe("security telemetry", () => {
     expect(label.length).toBeLessThanOrEqual(180);
   });
 
+  test("geo formatting joins city, country and ISP (each capped)", () => {
+    expect(formatGeo("Phnom Penh", "Cambodia", "Cellcard")).toBe(
+      "Phnom Penh, Cambodia · Cellcard",
+    );
+    expect(formatGeo("", "", "SomeISP")).toBe("SomeISP");
+    expect(formatGeo("Paris", "France", "")).toBe("Paris, France");
+    expect(formatGeo(null, undefined, "")).toBeNull();
+    const long = formatGeo("x".repeat(200), "y".repeat(200), "z".repeat(300));
+    expect(long!.length).toBeLessThanOrEqual(60 * 3 + 5);
+  });
+
+  test("fingerprint block joins only non-empty lines", () => {
+    expect(
+      formatFingerprint(["Fingerprint: a", "", null, "User-Agent: b", false]),
+    ).toBe("Fingerprint: a\nUser-Agent: b");
+    expect(formatFingerprint([])).toBe("");
+    expect(formatFingerprint([undefined, null, false, ""])).toBe("");
+  });
+
   test("unknown event types are rejected before any SQL runs", async () => {
     try {
       await recordAuthEvent({ type: "bogus" as AuthEventType });
@@ -1015,6 +1042,44 @@ describe("telegram hack alerts", () => {
   test("alert text stays under Telegram's 4096-char limit", () => {
     const text = buildAlertText({ type: "signin_fail", email: "x".repeat(9000) });
     expect(text.length).toBeLessThanOrEqual(4000);
+  });
+
+  test("photo caption carries the core facts within Telegram's limit", () => {
+    const core = buildAlertCore({
+      type: "signin_fail",
+      email: "sokha@example.com",
+      ip: "103.28.54.1",
+      geo: "Phnom Penh, Cambodia · Cellcard",
+      device: "Chrome · Windows",
+      at: 1_700_000_000_000,
+    });
+    expect(core).toContain("HACK ATTEMPT");
+    expect(core).toContain("sokha@example.com");
+    expect(core).toContain("103.28.54.1");
+    expect(core).toContain("Location: Phnom Penh, Cambodia · Cellcard");
+    expect(core).toContain("https://ipinfo.io/103.28.54.1");
+    expect(core).not.toContain("User-Agent"); // deep data lives in message #2
+
+    const huge = buildAlertCore({ type: "signin_fail", email: "x".repeat(900) });
+    expect(huge.length).toBeLessThanOrEqual(1024);
+  });
+
+  test("details message carries fingerprint, user agent and page", () => {
+    const msg = buildAlertDetails(
+      "Fingerprint: 8 cores · GPU\nUser-Agent: Mozilla/5.0\nPage: https://x/#/auth",
+    );
+    expect(msg).toContain("🔎 Details:");
+    expect(msg).toContain("8 cores · GPU");
+    expect(msg).toContain("Mozilla/5.0");
+    expect(msg).toContain("#/auth");
+    expect(buildAlertDetails("y".repeat(9000)).length).toBeLessThanOrEqual(4000);
+  });
+
+  test("identicon is deterministic and email-encoded", () => {
+    const url = identiconUrl(" Sokha@Example.COM ");
+    expect(url).toContain("api.dicebear.com/9.x/identicon/png");
+    expect(url).toContain("seed=sokha%40example.com");
+    expect(identiconUrl("sokha@example.com")).toBe(url);
   });
 
   test("cooldown allows one alert per type per window", () => {

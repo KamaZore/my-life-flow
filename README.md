@@ -4,6 +4,20 @@ A mobile-first personal workflow & task management PWA: Goals → Projects → P
 
 **Stack:** React 19 · TypeScript · Vite · Tailwind CSS 4 · shadcn/ui · Framer Motion · Neon Postgres (serverless Postgres over HTTPS — works from a static site)
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/landing.png" alt="Flowday landing page" width="680">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/sign-in.png" alt="Flowday sign-in" width="330">
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/mobile.png" alt="Flowday landing on mobile (full page)" width="190">
+</p>
+
+Live site: [kamazore.github.io/my-life-flow](https://kamazore.github.io/my-life-flow/)
+
 ## Architecture
 
 - **Frontend:** static Vite SPA — deployable to GitHub Pages, Netlify, or any static host.

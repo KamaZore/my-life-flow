@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Flowday</title>
+    <!--
+      Custom GitHub Pages 404 — SPA deep-link rescue.
+
+      GitHub Pages has no server rewrites, so a real-looking app URL such as
+      /my-life-flow/life/today (old bookmark, external link, PWA shortcut)
+      would normally show GitHub's default 404 page. Instead, Pages serves
+      THIS file (still with a proper 404 status for crawlers) and the script
+      below forwards the path into the app's hash router:
+        /my-life-flow/life/today  ->  /my-life-flow/#/life/today
+      The router then applies its own legacy redirects and auth guards.
+      Pairs with Vite: public/ is copied to dist/ verbatim by `vite build`.
+    -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0b0b12;
+      }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font:
+          15px/1.5 system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+        color: #6b6b80;
+      }
+      a {
+        color: #7c6cf6;
+      }
+    </style>
+    <script>
+      (function () {
+        // Leading path segments that belong to the site root. On a project
+        // page that is the repo name ("/my-life-flow"); change to 0 if the
+        // app ever moves to a root domain (https://example.com/).
+        var pathSegmentsToKeep = 1;
+
+        var l = window.location;
+        var segments = l.pathname.split("/"); // ["", "my-life-flow", "life", "today"]
+        var rest = segments.slice(1 + pathSegmentsToKeep).join("/"); // "life/today"
+        var base = segments.slice(0, 1 + pathSegmentsToKeep).join("/"); // "/my-life-flow"
+
+        // Query string travels inside the hash so the SPA keeps full context.
+        var target =
+          l.protocol +
+          "//" +
+          l.hostname +
+          (l.port ? ":" + l.port : "") +
+          base +
+          "/#/" +
+          rest +
+          (l.search ? "?" + l.search.replace(/^\?/, "") : "") +
+          l.hash;
+
+        l.replace(target); // replace(), not assign(): no history loop on Back
+      })();
+    </script>
+  </head>
+  <body>
+    <noscript>
+      Flowday needs JavaScript to run.
+      <a href="/my-life-flow/">Open the app →</a>
+    </noscript>
+  </body>
+</html>

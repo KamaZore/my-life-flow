@@ -16,6 +16,32 @@ A mobile-first personal workflow & task management PWA: Goals → Projects → P
   <img src="docs/screenshots/mobile.png" alt="Flowday landing on mobile (full page)" width="190">
 </p>
 
+**Inside the app** — pick a workspace, then work through the day:
+
+<p align="center">
+  <img src="docs/screenshots/select-system.png" alt="Select a system — Life, Expense, Business, Salon" width="680">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/today.png" alt="Today — daily actions, habits and progress" width="680">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/tasks.png" alt="Tasks — projects, processes and daily actions" width="330">
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/salon.png" alt="Salon management dashboard" width="330">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/expense.png" alt="Expense management dashboard" width="330">
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/progress.png" alt="Progress charts and trends" width="330">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/today-mobile.png" alt="Today on mobile" width="190">
+</p>
+
 Live site: [kamazore.github.io/my-life-flow](https://kamazore.github.io/my-life-flow/)
 
 ## Architecture
